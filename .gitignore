@@ -13,3 +13,7 @@
 .externalNativeBuild
 .cxx
 local.properties
+# signing keys stay out of the repository
+keystore.properties
+*.jks
+*.keystore

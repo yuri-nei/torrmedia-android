@@ -81,6 +81,8 @@ object TorrentHelper {
     }
 
     fun getTorrentMagnet(torr: Torrent): String {
+        if (torr.qbitMagnet.isNotEmpty())
+            return torr.qbitMagnet
         return "magnet:?xt=urn:btih:${torr.hash}&dn=${torr.title.urlEncode()}"
     }
 

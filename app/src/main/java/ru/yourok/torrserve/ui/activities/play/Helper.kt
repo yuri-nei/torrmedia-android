@@ -79,25 +79,41 @@ fun PlayActivity.addAndExit() {
 fun PlayActivity.qbitAndExit() {
     lifecycleScope.launch(Dispatchers.IO) {
         showProgress()
-        val categories = QbitApi.getCategories()
+        val categories = try {
+            QbitApi.getCategories()
+        } catch (e: Exception) {
+            hideProgress()
+            App.toast(App.context.getString(R.string.qbit_categories_error) + ": " + (e.message ?: ""), true)
+            withContext(Dispatchers.Main) { finish() }
+            return@launch
+        }
         hideProgress()
         withContext(Dispatchers.Main) {
-            val default = Settings.getQbitCategory()
-            if (categories.isEmpty()) {
-                // category list unavailable — send with the default one, no extra questions
-                qbitSendAndExit(default)
-            } else {
-                var checked = categories.indexOf(default).coerceAtLeast(0)
-                AlertDialog.Builder(this@qbitAndExit)
-                    .setTitle(R.string.qbit_select_category)
-                    .setSingleChoiceItems(categories.toTypedArray(), checked) { _, which -> checked = which }
-                    .setPositiveButton(android.R.string.ok) { _, _ -> qbitSendAndExit(categories[checked]) }
-                    .setNegativeButton(android.R.string.cancel) { _, _ -> finish() }
-                    .setOnCancelListener { finish() }
-                    .show()
-            }
+            AlertDialog.Builder(this@qbitAndExit)
+                .setTitle(R.string.qbit_send_confirm)
+                .setMessage(torrentLink)
+                .setPositiveButton(android.R.string.ok) { _, _ -> chooseCategoryAndExit(categories) }
+                .setNegativeButton(android.R.string.cancel) { _, _ -> finish() }
+                .setOnCancelListener { finish() }
+                .show()
         }
     }
+}
+
+private fun PlayActivity.chooseCategoryAndExit(categories: List<String>) {
+    val default = Settings.getQbitCategory()
+    if (categories.isEmpty()) {
+        qbitSendAndExit(default)
+        return
+    }
+    var checked = categories.indexOf(default).coerceAtLeast(0)
+    AlertDialog.Builder(this)
+        .setTitle(R.string.qbit_select_category)
+        .setSingleChoiceItems(categories.toTypedArray(), checked) { _, which -> checked = which }
+        .setPositiveButton(android.R.string.ok) { _, _ -> qbitSendAndExit(categories[checked]) }
+        .setNegativeButton(android.R.string.cancel) { _, _ -> finish() }
+        .setOnCancelListener { finish() }
+        .show()
 }
 
 private fun PlayActivity.qbitSendAndExit(category: String) {

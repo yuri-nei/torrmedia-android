@@ -45,6 +45,9 @@ data class Torrent(
     var startedFiles: Int = 0,
     var mediaFiles: Int = 0,
     var mediaItemPath: String = "",
+
+    var qbitHash: String = "",
+    var qbitMagnet: String = "",
 )
 
 data class FileStat(

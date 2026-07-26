@@ -23,9 +23,10 @@ import androidx.appcompat.app.AlertDialog
 import ru.yourok.torrserve.server.api.Api
 import ru.yourok.torrserve.server.api.TorrmediaApi
 import ru.yourok.torrserve.server.api.QbitApi
-import ru.yourok.torrserve.server.api.matchesShelfItem
+import ru.yourok.torrserve.server.api.resolveSingleByHash
 import ru.yourok.torrserve.server.models.torrent.Torrent
 import ru.yourok.torrserve.settings.Settings
+import ru.yourok.torrserve.ui.activities.play.PlayActivity
 import ru.yourok.torrserve.utils.TorrentHelper
 import ru.yourok.torrserve.utils.TorrentHelper.getTorrentMagnet
 import kotlin.concurrent.thread
@@ -82,7 +83,9 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
 //                    }
                     val chooser = Intent.createChooser(magnetIntent, App.context.getString(R.string.open_with)).apply {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                            val excludedComponentNames = arrayOf(ComponentName(BuildConfig.APPLICATION_ID, "${BuildConfig.APPLICATION_ID}.ui.activities.play.PlayActivity"))
+                            val excludedComponentNames = arrayOf(
+                                ComponentName(BuildConfig.APPLICATION_ID, PlayActivity::class.java.name)
+                            )
                             putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, excludedComponentNames)
                         }
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -125,55 +128,20 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
             R.id.itemRemoveTorrent -> {
                 val remote = selected.filter { it.src != null }
                 val local = selected.filter { it.src == null }
-                thread {
-                    local.forEach {
-                        try {
-                            Api.remTorrent(it.hash)
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    }
-                }
                 if (remote.isNotEmpty()) {
                     AlertDialog.Builder(listView.context)
                         .setTitle(R.string.qbit_delete_torrent)
                         .setMessage(R.string.qbit_delete_torrent_confirm)
                         .setPositiveButton(android.R.string.ok) { _, _ ->
                             thread {
-                                remote.forEach { torr ->
-                                    try {
-                                        if (torr.src == "media") {
-                                            // hash carries the torrmedia item path; a live torrent must go
-                                            // as a whole, else qBit re-downloads the files we just deleted
-                                            // If qBit is configured but temporarily unavailable, fail closed:
-                                            // treating an API error as "torrent is gone" would only remove shelf
-                                            // files and then incorrectly purge the torrent's viewed history.
-                                            val live = if (Settings.getQbitEnabled()) {
-                                                QbitApi.listTorrents()
-                                                    .find { matchesShelfItem(it.contentPath, torr.hash) }
-                                            } else {
-                                                null
-                                            }
-                                            if (live != null) {
-                                                QbitApi.deleteTorrent(live.hash, true)
-                                            } else {
-                                                TorrmediaApi.list().find { it.path == torr.hash }
-                                                    ?.files?.forEach { TorrmediaApi.deleteFile(it.path) }
-                                            }
-                                            TorrmediaApi.remViewedItem(torr.hash)
-                                        } else {
-                                            QbitApi.deleteTorrent(torr.hash, true)
-                                            if (torr.mediaItemPath.isNotEmpty())
-                                                TorrmediaApi.remViewedItem(torr.mediaItemPath)
-                                        }
-                                    } catch (e: Exception) {
-                                        App.toast(App.context.getString(R.string.qbit_send_error) + ": " + (e.message ?: ""), true)
-                                    }
-                                }
+                                removeLocal(local)
+                                remote.forEach { torr -> removeRemote(torr) }
                             }
                         }
                         .setNegativeButton(android.R.string.cancel, null)
                         .show()
+                } else {
+                    thread { removeLocal(local) }
                 }
             }
 
@@ -181,7 +149,13 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
                 thread {
                     selected.forEach {
                         try {
-                            Api.remViewed(it.hash)
+                            when (it.src) {
+                                "media" -> TorrmediaApi.remViewedItem(it.hash)
+                                "qbit" -> if (it.mediaItemPath.isNotEmpty())
+                                    TorrmediaApi.remViewedItem(it.mediaItemPath)
+
+                                else -> Api.remViewed(it.hash)
+                            }
                         } catch (e: Exception) {
                             e.printStackTrace()
                         }
@@ -205,6 +179,47 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
     }
 
     override fun onDestroyActionMode(actionMode: ActionMode?) {
+    }
+
+    private fun removeLocal(local: List<Torrent>) {
+        local.forEach {
+            try {
+                Api.remTorrent(it.hash)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private fun removeRemote(torr: Torrent) {
+        try {
+            if (torr.src == "media") {
+                // hash carries the torrmedia item path; a live torrent must go
+                // as a whole, else qBit re-downloads the files we just deleted.
+                // If qBit is configured but temporarily unavailable, fail closed:
+                // treating an API error as "torrent is gone" would only remove shelf
+                // files and then incorrectly purge the torrent's viewed history.
+                val resp = TorrmediaApi.list()
+                if (Settings.getQbitEnabled() && !resp.qbitAvailable)
+                    throw IllegalStateException(App.context.getString(R.string.qbit_stale_qbit))
+                val item = resp.items.find { it.path == torr.hash }
+                    ?: throw IllegalStateException(App.context.getString(R.string.qbit_item_not_found))
+                if (item.torrentHash.isNotEmpty()) {
+                    val live = resolveSingleByHash(item.torrentHash, QbitApi.listTorrents()) { it.hash }
+                        ?: throw IllegalStateException(App.context.getString(R.string.qbit_item_not_found))
+                    QbitApi.deleteTorrent(live.hash, true)
+                } else {
+                    item.files.forEach { TorrmediaApi.deleteFile(it.path) }
+                }
+                TorrmediaApi.remViewedItem(torr.hash)
+            } else {
+                QbitApi.deleteTorrent(torr.hash, true)
+                if (torr.mediaItemPath.isNotEmpty())
+                    TorrmediaApi.remViewedItem(torr.mediaItemPath)
+            }
+        } catch (e: Exception) {
+            App.toast(App.context.getString(R.string.qbit_send_error) + ": " + (e.message ?: ""), true)
+        }
     }
 
     private val selectedItems: List<Torrent>

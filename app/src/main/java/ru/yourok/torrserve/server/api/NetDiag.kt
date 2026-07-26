@@ -25,15 +25,15 @@ object NetDiag {
         sb.appendLine()
         report(sb, "torrmedia", Settings.getTorrmediaUrl())
         runCatching {
-            val items = TorrmediaApi.list()
-            sb.appendLine("  API: /list OK, ${items.size} item(s)")
+            val resp = TorrmediaApi.list()
+            sb.appendLine("  API: /list OK, ${resp.items.size} item(s), qbit_available=${resp.qbitAvailable}")
         }.onFailure { sb.appendLine("  API: ${it.javaClass.simpleName}: ${it.message}") }
 
         return sb.toString().trimEnd()
     }
 
     private fun report(sb: StringBuilder, title: String, base: String) {
-        sb.appendLine("$title: \"$base\" (len=${base.length})")
+        sb.appendLine("$title:")
         if (base.isEmpty()) {
             sb.appendLine("  URL is not set")
             return
@@ -50,13 +50,18 @@ object NetDiag {
         sb.appendLine("  host=[$host] chars=${host.map { it.code }.joinToString(",")} port=$port")
 
         val started = System.currentTimeMillis()
+        val socket = Socket()
         try {
-            Socket().use { s ->
-                s.connect(InetSocketAddress(host, port), 7000)
-                sb.appendLine("  TCP: connected in ${System.currentTimeMillis() - started} ms (local ${s.localAddress?.hostAddress})")
-            }
+            socket.connect(InetSocketAddress(host, port), 7000)
+            sb.appendLine("  TCP: connected in ${System.currentTimeMillis() - started} ms (local ${socket.localAddress?.hostAddress})")
         } catch (e: Exception) {
             sb.appendLine("  TCP: ${e.javaClass.simpleName}: ${e.message} (${System.currentTimeMillis() - started} ms)")
+        } finally {
+            try {
+                socket.close()
+            } catch (e: Exception) {
+                // already closed / never connected
+            }
         }
     }
 }

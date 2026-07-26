@@ -389,4 +389,13 @@
     <string name="qbit_resume_started">Download enabled</string>
     <string name="qbit_resume_failed">qBittorrent kept the file skipped — it is busy checking, try again later</string>
     <string name="qbit_cancel_download_confirm">Cancel the download and delete the file?</string>
+    <string name="qbit_data_stale">Data is incomplete, actions are blocked</string>
+    <string name="qbit_state_no_data">no data</string>
+    <string name="qbit_stale_mm">torrmedia is unavailable</string>
+    <string name="qbit_stale_qbit">qBittorrent is unavailable</string>
+    <string name="qbit_stale_qbit_off">qBittorrent is off in settings</string>
+    <string name="qbit_file_changed">The file changed while the dialog was open — action cancelled</string>
+    <string name="qbit_item_not_found">Item not found on the server, nothing was deleted</string>
+    <string name="qbit_categories_error">Could not read the category list</string>
+    <string name="qbit_send_confirm">Send this link to qBittorrent?</string>
 </resources>

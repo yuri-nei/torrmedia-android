@@ -26,6 +26,7 @@ data class QbitTorrent(
     val size: Long = 0,
     @SerializedName("save_path") val savePath: String = "",
     @SerializedName("content_path") val contentPath: String = "",
+    @SerializedName("magnet_uri") val magnetUri: String = "",
     @SerializedName("added_on") val addedOn: Long = 0,
     val downloaded: Long = 0,
     val completed: Long = 0,
@@ -59,6 +60,8 @@ object QbitApi {
     /// Outcome of enableFile(), so the UI can say what actually happened
     enum class EnableResult { STARTED, STALLED, BUSY_CHECKING }
 
+    data class EnableOutcome(val result: EnableResult, val warnings: List<String> = emptyList())
+
     private const val timeout = 7000 // in ms
 
     // qBittorrent 5.x names the session cookie QBT_SID_<port>, older builds used plain SID —
@@ -68,6 +71,22 @@ object QbitApi {
 
     @Volatile
     private var sid: String = ""
+
+    @Volatile
+    private var sidKey: String = ""
+
+    private fun authKey(base: String): String =
+        "$base|${Settings.getQbitUser()}|${Settings.getQbitPass().hashCode()}"
+
+    @Synchronized
+    private fun syncAuthKey(base: String) {
+        val key = authKey(base)
+        if (sidKey != key) {
+            sidKey = key
+            sidName = ""
+            sid = ""
+        }
+    }
 
     private fun base(): String {
         val base = Settings.getQbitUrl()
@@ -121,6 +140,7 @@ object QbitApi {
         // and execAuthed still verifies with the real request
         sidName = name
         sid = value
+        sidKey = authKey(base)
         return value
     }
 
@@ -133,6 +153,7 @@ object QbitApi {
 
     /// Runs a request with the cached SID, relogins once if the session is stale
     private fun execAuthed(base: String, build: (String) -> Connection): Connection.Response {
+        syncAuthKey(base)
         var s = sid
         if (s.isEmpty())
             s = login(base)
@@ -147,7 +168,6 @@ object QbitApi {
         return resp
     }
 
-    /// Login probe for the settings self-test (never prints the password itself)
     fun loginProbe(): String {
         val base = base()
         val resp = connect("$base/api/v2/auth/login", base)
@@ -158,8 +178,9 @@ object QbitApi {
         val cookieName = resp.cookies().keys.firstOrNull { it.contains("SID", true) }
             ?: resp.headers("Set-Cookie").firstOrNull { it.substringBefore('=').contains("SID", true) }
                 ?.substringBefore('=')?.trim() ?: "-"
+        val credsSet = Settings.getQbitUser().isNotEmpty() && Settings.getQbitPass().isNotEmpty()
         return "HTTP ${resp.statusCode()}, cookie=[$cookieName], body=\"${resp.body().take(16)}\", " +
-                "user=\"${Settings.getQbitUser()}\" (len=${Settings.getQbitUser().length}), passLen=${Settings.getQbitPass().length}"
+                "credentials=${if (credsSet) "set" else "empty"}"
     }
 
     /// Throws QbitException/network exceptions on failure. Call off the main thread.
@@ -181,20 +202,15 @@ object QbitApi {
             throw QbitException("add: HTTP ${resp.statusCode()} ${resp.body().take(80)}")
     }
 
-    /// Category names for the picker; empty list on any error (caller falls back to default)
     fun getCategories(): List<String> {
-        return try {
-            val base = base()
-            val resp = execAuthed(base) { _ ->
-                connect("$base/api/v2/torrents/categories", base)
-                    .method(Connection.Method.GET)
-            }
-            if (resp.statusCode() !in 200..299)
-                return emptyList()
-            Gson().fromJson(resp.body(), JsonObject::class.java).keySet().sorted()
-        } catch (e: Exception) {
-            emptyList()
+        val base = base()
+        val resp = execAuthed(base) { _ ->
+            connect("$base/api/v2/torrents/categories", base)
+                .method(Connection.Method.GET)
         }
+        if (resp.statusCode() !in 200..299)
+            throw QbitException("categories: HTTP ${resp.statusCode()}")
+        return Gson().fromJson(resp.body(), JsonObject::class.java)?.keySet()?.sorted() ?: emptyList()
     }
 
     /// All torrents known to qBittorrent
@@ -222,20 +238,6 @@ object QbitApi {
         return Gson().fromJson(resp.body(), object : TypeToken<List<QbitFile>>() {}.type)
     }
 
-    /// Re-enables (priority=1) or de-prioritizes a single file download.
-    /// Deleting files stays on torrmedia — this is only for resuming skipped ones.
-    fun setFilePriority(hash: String, fileIndex: Int, priority: Int) {
-        val base = base()
-        val resp = execAuthed(base) { _ ->
-            connect("$base/api/v2/torrents/filePrio", base)
-                .data("hash", hash)
-                .data("id", fileIndex.toString())
-                .data("priority", priority.toString())
-                .method(Connection.Method.POST)
-        }
-        if (resp.statusCode() !in 200..299)
-            throw QbitException("filePrio: HTTP ${resp.statusCode()}")
-    }
 
     /// qBittorrent 5.x renamed pause/resume to stop/start; legacy names stay as a fallback
     fun pauseTorrent(hash: String) = switchTorrent(hash, "stop", "pause")
@@ -266,45 +268,21 @@ object QbitApi {
         !qbitIsChecking(torrent.state) && torrent.amountLeft == 0L &&
                 files.any { it.priority != 0 && it.progress < 1.0 }
 
-    /// Starts a torrent and heals the stalled state described above. Returns true when a recheck
-    /// was started — it runs for a while and qBit resumes downloading on its own afterwards.
     suspend fun startTorrent(hash: String): Boolean = withContext(Dispatchers.IO) {
         resumeTorrent(hash)
         delay(1500) // qBit needs a moment before its counters can be trusted
         val torrent = listTorrents().find { it.hash == hash } ?: return@withContext false
-        val files = getFiles(hash)
-        if (!isStalled(torrent, files))
-            return@withContext false
-
-        // The engine kept its old wanted-set: qBit reports priority 1 for the file while the
-        // torrent still counts itself complete (size/amount_left exclude it). Two things fix that,
-        // and both need the torrent to be actually running — force start keeps it from stopping
-        // itself again because of seeding limits.
-        setForceStart(hash, true)
-        resumeTorrent(hash)
-        delay(1000)
-        // re-apply the priorities on the running torrent so libtorrent rebuilds what it wants
-        files.filter { it.priority != 0 && it.progress < 1.0 }.forEach {
-            runCatching {
-                setFilePriority(hash, it.index, 0)
-                setFilePriority(hash, it.index, 1)
-            }
-        }
-        delay(1500)
-        val after = listTorrents().find { it.hash == hash }
-        // true means "still not moving" — the caller shows it as a warning, no silent failure
-        after == null || isStalled(after, getFiles(hash))
+        isStalled(torrent, getFiles(hash))
     }
 
     /// Switches a skipped file back on through torrmedia. DELETE and enable share one
     /// per-torrent server lock, so Android never races a recheck or toggles priorities.
-    suspend fun enableFile(hash: String, fileIndex: Int): EnableResult = withContext(Dispatchers.IO) {
+    suspend fun enableFile(hash: String, fileIndex: Int): EnableOutcome = withContext(Dispatchers.IO) {
         try {
-            TorrmediaApi.enableFile(hash, fileIndex)
-            EnableResult.STARTED
+            EnableOutcome(EnableResult.STARTED, TorrmediaApi.enableFile(hash, fileIndex))
         } catch (e: TorrmediaApi.TorrmediaException) {
             if (e.statusCode == 409)
-                EnableResult.BUSY_CHECKING
+                EnableOutcome(EnableResult.BUSY_CHECKING)
             else
                 throw e
         }
@@ -432,4 +410,6 @@ fun QbitTorrent.toUiTorrent(): Torrent = Torrent(
     bit_rate = null,
     file_stats = null,
     src = "qbit",
+    qbitHash = hash,
+    qbitMagnet = magnetUri,
 )

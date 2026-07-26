@@ -7,6 +7,12 @@ plugins {
 }
 
 android {
+
+    lint {
+        disable 'MissingTranslation'
+        abortOnError true
+        warningsAsErrors false
+    }
     compileSdk 37
     defaultConfig {
         applicationId "io.github.yurinei.torrmedia"
@@ -19,10 +25,26 @@ android {
         // Use SupportLibrary for vectors
         vectorDrawables.useSupportLibrary = true
     }
+    signingConfigs {
+        release {
+            def props = new Properties()
+            def propsFile = rootProject.file("keystore.properties")
+            if (propsFile.exists())
+                propsFile.withInputStream { props.load(it) }
+            def storePath = props.getProperty("storeFile") ?: System.getenv("TORRMEDIA_KEYSTORE_FILE")
+            if (storePath) {
+                storeFile file(storePath)
+                storePassword props.getProperty("storePassword") ?: System.getenv("TORRMEDIA_KEYSTORE_PASSWORD")
+                keyAlias props.getProperty("keyAlias") ?: System.getenv("TORRMEDIA_KEY_ALIAS")
+                keyPassword props.getProperty("keyPassword") ?: System.getenv("TORRMEDIA_KEY_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release.storeFile != null ? signingConfigs.release : null
         }
     }
     compileOptions {
@@ -102,6 +124,7 @@ dependencies {
     def jsoupVersion = '1.16.1' // 1.16.2, 1.17.1, 1.17.2 thorow java.lang.VerifyError on api19
     //noinspection GradleDependency
     implementation "org.jsoup:jsoup:${jsoupVersion}"
+    testImplementation 'junit:junit:4.13.2'
 }
 
 repositories {

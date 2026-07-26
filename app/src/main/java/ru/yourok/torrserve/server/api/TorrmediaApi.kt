@@ -2,9 +2,11 @@ package ru.yourok.torrserve.server.api
 
 import android.net.Uri
 import com.google.gson.Gson
+import com.google.gson.annotations.SerializedName
 import org.jsoup.Connection
 import org.jsoup.Jsoup
 import ru.yourok.torrserve.atv.Utils.isBrokenTCL
+import ru.yourok.torrserve.ui.fragments.qbit.FileOwner
 import ru.yourok.torrserve.server.models.torrent.Torrent
 import ru.yourok.torrserve.settings.Settings
 import ru.yourok.torrserve.utils.TlsSocketFactory
@@ -23,6 +25,9 @@ data class TorrmediaFile(
     val path: String = "", // relative to the torrmedia root
     val size: Long = 0,
     val mtime: Long = 0,
+    val owner: String = FileOwner.AMBIGUOUS,
+    @SerializedName("torrent_hash") val torrentHash: String = "",
+    @SerializedName("qbit_file_id") val qbitFileId: Int = -1,
     val watch: String = "",
     val pos: Long = 0,
 ) {
@@ -33,10 +38,14 @@ data class TorrmediaFile(
 data class TorrmediaItem(
     val title: String = "",
     val path: String = "",
+    @SerializedName("torrent_hash") val torrentHash: String = "",
     val files: List<TorrmediaFile> = emptyList(),
 )
 
-private data class TorrmediaListResp(val items: List<TorrmediaItem> = emptyList())
+data class TorrmediaList(
+    val items: List<TorrmediaItem> = emptyList(),
+    @SerializedName("qbit_available") val qbitAvailable: Boolean = false,
+)
 
 data class TorrmediaViewed(
     val path: String = "",
@@ -62,7 +71,9 @@ object TorrmediaApi {
     class TorrmediaException(msg: String, val statusCode: Int = 0) : Exception(msg)
 
     private const val timeout = 7000 // in ms
-    private const val operationTimeout = 11 * 60 * 1000
+
+    private const val serverDeadline = 300_000
+    private const val operationTimeout = 2 * serverDeadline + 60_000
 
     private fun base(): String {
         val base = Settings.getTorrmediaUrl()
@@ -82,13 +93,27 @@ object TorrmediaApi {
         return conn
     }
 
-    fun list(): List<TorrmediaItem> {
+    fun list(): TorrmediaList {
         val resp = connect("${base()}/list")
             .method(Connection.Method.GET)
             .execute()
         if (resp.statusCode() !in 200..299)
-            throw TorrmediaException("list: HTTP ${resp.statusCode()}")
-        return Gson().fromJson(resp.body(), TorrmediaListResp::class.java)?.items ?: emptyList()
+            throw TorrmediaException("list: HTTP ${resp.statusCode()}", resp.statusCode())
+        return Gson().fromJson(resp.body(), TorrmediaList::class.java) ?: TorrmediaList()
+    }
+
+    private fun checkResult(op: String, resp: Connection.Response, okCodes: Set<Int> = emptySet()): List<String> {
+        if (resp.statusCode() in okCodes)
+            return emptyList()
+        val result = parseTorrmediaResult(resp.body())
+        if (resp.statusCode() !in 200..299)
+            throw TorrmediaException(
+                "$op: HTTP ${resp.statusCode()} ${result.error.ifEmpty { resp.body().take(120) }}",
+                resp.statusCode()
+            )
+        if (!result.ok)
+            throw TorrmediaException("$op: ${result.error.ifEmpty { "server reported failure" }}", resp.statusCode())
+        return result.warnings
     }
 
     /// External-player URL: a real filename in the path gives every episode its own resume key.
@@ -99,35 +124,32 @@ object TorrmediaApi {
     private fun fileUrl(path: String): String = "${base()}/file?path=${Uri.encode(path)}"
 
     /// Deletes one file (episode). The service itself untangles qBittorrent re-download logic.
-    /// 404 counts as success: the file is gone either way.
-    fun deleteFile(path: String) {
+    /// 404 counts as success: the file is gone either way. Returns server warnings, if any.
+    fun deleteFile(path: String): List<String> {
         val resp = connect(fileUrl(path), operationTimeout)
             .method(Connection.Method.DELETE)
             .execute()
-        if (resp.statusCode() !in 200..299 && resp.statusCode() != 404)
-            throw TorrmediaException("delete: HTTP ${resp.statusCode()} ${resp.body().take(120)}", resp.statusCode())
+        return checkResult("delete", resp, setOf(404))
     }
 
     /// Marks an exact qBittorrent file unwanted and trims any partial/full data.
     /// Hash+ID works even before qBit creates the path and does not depend on category layout.
-    fun deleteTorrentFile(hash: String, fileIndex: Int) {
+    fun deleteTorrentFile(hash: String, fileIndex: Int): List<String> {
         val url = "${base()}/file?hash=${Uri.encode(hash)}&id=$fileIndex"
         val resp = connect(url, operationTimeout)
             .method(Connection.Method.DELETE)
             .execute()
-        if (resp.statusCode() !in 200..299)
-            throw TorrmediaException("delete: HTTP ${resp.statusCode()} ${resp.body().take(120)}", resp.statusCode())
+        return checkResult("delete", resp)
     }
 
     /// Re-enables one skipped qBittorrent file through the same serialized
     /// server-side workflow that owns DELETE. No qBit priority toggles on Android.
-    fun enableFile(hash: String, fileIndex: Int) {
+    fun enableFile(hash: String, fileIndex: Int): List<String> {
         val url = "${base()}/file/enable?hash=${Uri.encode(hash)}&id=$fileIndex"
         val resp = connect(url, operationTimeout)
             .method(Connection.Method.POST)
             .execute()
-        if (resp.statusCode() !in 200..299)
-            throw TorrmediaException("enable: HTTP ${resp.statusCode()} ${resp.body().take(120)}", resp.statusCode())
+        return checkResult("enable", resp)
     }
 
     fun listViewed(item: String? = null): List<TorrmediaViewed> {
@@ -151,30 +173,21 @@ object TorrmediaApi {
         val resp = connect("${base()}/viewed?path=${Uri.encode(path)}&state=$value")
             .method(Connection.Method.POST)
             .execute()
-        if (resp.statusCode() == 404)
-            return
-        if (resp.statusCode() !in 200..299)
-            throw TorrmediaException("set viewed: HTTP ${resp.statusCode()} ${resp.body().take(120)}", resp.statusCode())
+        checkResult("set viewed", resp, setOf(404))
     }
 
     fun remViewed(path: String) {
         val resp = connect("${base()}/viewed?path=${Uri.encode(path)}")
             .method(Connection.Method.DELETE)
             .execute()
-        if (resp.statusCode() == 404)
-            return
-        if (resp.statusCode() !in 200..299)
-            throw TorrmediaException("remove viewed: HTTP ${resp.statusCode()} ${resp.body().take(120)}", resp.statusCode())
+        checkResult("remove viewed", resp, setOf(404))
     }
 
     fun remViewedItem(item: String) {
         val resp = connect("${base()}/viewed?item=${Uri.encode(item)}")
             .method(Connection.Method.DELETE)
             .execute()
-        if (resp.statusCode() == 404)
-            return
-        if (resp.statusCode() !in 200..299)
-            throw TorrmediaException("remove viewed item: HTTP ${resp.statusCode()} ${resp.body().take(120)}", resp.statusCode())
+        checkResult("remove viewed item", resp, setOf(404))
     }
 
     fun health(): Boolean {
@@ -184,17 +197,6 @@ object TorrmediaApi {
             false
         }
     }
-}
-
-/// True when a qBittorrent torrent holds exactly this shelf item.
-/// Primary: content_path ends with the item path; fallback: same folder name
-/// (covers a torrmedia root that does not line up with the qBit save path).
-fun matchesShelfItem(contentPath: String, itemPath: String): Boolean {
-    val cp = contentPath.trimEnd('/')
-    val ip = itemPath.trim('/')
-    if (ip.isEmpty()) return false
-    if (cp.endsWith("/$ip")) return true
-    return cp.substringAfterLast('/') == ip.substringAfterLast('/')
 }
 
 /// Adapts a torrmedia item to the UI list model (hash carries the item path)
@@ -238,4 +240,5 @@ fun TorrmediaItem.toUiTorrent(): Torrent = Torrent(
     startedFiles = files.count { it.watchState == TorrmediaWatch.STARTED },
     mediaFiles = files.size,
     mediaItemPath = path,
+    qbitHash = torrentHash,
 )

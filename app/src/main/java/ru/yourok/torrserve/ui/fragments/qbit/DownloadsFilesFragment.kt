@@ -30,19 +30,27 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import ru.yourok.torrserve.R
 import ru.yourok.torrserve.app.App
 import ru.yourok.torrserve.ext.append
+import ru.yourok.torrserve.server.api.FileOpSnapshot
+import ru.yourok.torrserve.server.api.TorrmediaFile
+import ru.yourok.torrserve.server.api.TorrmediaItem
+import ru.yourok.torrserve.server.api.TorrmediaViewed
 import ru.yourok.torrserve.server.api.TorrmediaApi
 import ru.yourok.torrserve.server.api.TorrmediaWatch
-import ru.yourok.torrserve.server.api.matchesShelfItem
 import ru.yourok.torrserve.server.api.QbitApi
 import ru.yourok.torrserve.server.api.QbitTorrent
+import ru.yourok.torrserve.server.api.normalizeHash
 import ru.yourok.torrserve.server.api.qbitHeaderStatusLabel
 import ru.yourok.torrserve.server.api.qbitIsChecking
 import ru.yourok.torrserve.server.api.qbitIsPaused
 import ru.yourok.torrserve.server.api.qbitStateLabel
+import ru.yourok.torrserve.server.api.resolveSingleByHash
+import ru.yourok.torrserve.server.api.snapshotStillValid
 import ru.yourok.torrserve.settings.Settings
 import ru.yourok.torrserve.ui.dialogs.PlayersDialog
 import ru.yourok.torrserve.ui.fragments.TSFragment
@@ -50,8 +58,8 @@ import ru.yourok.torrserve.utils.Format
 import ru.yourok.torrserve.utils.Mime
 import ru.yourok.torrserve.utils.ThemeUtil
 import java.io.File
+import java.util.Collections
 import java.util.Locale
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 class DownloadsFilesFragment : TSFragment() {
@@ -73,9 +81,6 @@ class DownloadsFilesFragment : TSFragment() {
             }
         }
     }
-
-    /// ENABLING/DELETING are optimistic states shown while the server applies the request
-    private enum class State { DOWNLOADED, PROGRESS, ENABLING, DELETING, SKIPPED }
 
     private enum class HeaderAction(
         val textRes: Int,
@@ -101,28 +106,49 @@ class DownloadsFilesFragment : TSFragment() {
         val torrmediaPath: String, // torrmedia rel path (real when on disk, constructed otherwise)
         val size: Long,
         val pct: Int,
-        val state: State,
+        val state: FileState,
         val qbitIndex: Int, // -1 when the torrent is gone from qBittorrent
         val label: String = "",
         val checking: Boolean = false, // torrent is being rehashed right now
         val watch: TorrmediaWatch = TorrmediaWatch.NONE,
         val pos: Long = 0,
+        val identified: Boolean = false,
     )
 
     private val filesAdapter = FilesAdapter()
     private var mode = MODE_MEDIA
     private var id = ""
     private var torrTitle = ""
+
+    @Volatile
     private var torrHash = "" // resolved live qBit torrent (if any)
+
+    @Volatile
     private var torrItemPath = "" // torrmedia item key, retained even for deleted/skipped files
+
+    @Volatile
     private var torrState = ""
-    private var qbitLookupAvailable = false
+
+    @Volatile
+    private var dataValid = false
+
+    @Volatile
+    private var torrIdentified = false
+
+    @Volatile
+    private var staleReason = ""
+
+    private var lastTorrmediaItems: List<TorrmediaItem> = emptyList()
     private val activeActions = AtomicInteger(0)
     private val busy: Boolean
         get() = activeActions.get() > 0 // keep optimistic controls while any request is in flight
+
+    @Volatile
     private var lastRows: List<Row> = emptyList()
-    private val enabling = mutableSetOf<Int>() // file indexes tapped but not yet confirmed by qBit
-    private val deleting = ConcurrentHashMap.newKeySet<Int>()
+    private val loadMutex = Mutex()
+
+    private val enabling: MutableSet<Int> = Collections.synchronizedSet(mutableSetOf())
+    private val deleting: MutableSet<Int> = Collections.synchronizedSet(mutableSetOf())
     private var lastOpenAt = 0L
     private var focusApplied = false
     private var pollJob: Job? = null
@@ -143,7 +169,10 @@ class DownloadsFilesFragment : TSFragment() {
         // pause/resume is wired in showInfo(): its label depends on the live torrent state
         view.findViewById<Button>(R.id.btnQbitDeleteTorrent)?.apply {
             TooltipCompat.setTooltipText(this, getString(R.string.qbit_delete_torrent))
+            isEnabled = false
             setOnClickListener {
+                if (!destructiveReady())
+                    return@setOnClickListener
                 AlertDialog.Builder(requireContext())
                     .setTitle(R.string.qbit_delete_torrent)
                     .setMessage(R.string.qbit_delete_torrent_confirm)
@@ -157,7 +186,7 @@ class DownloadsFilesFragment : TSFragment() {
             setOnItemClickListener { _, _, position, _ ->
                 val row = filesAdapter.getItem(position) as Row? ?: return@setOnItemClickListener
                 when (row.state) {
-                    State.DOWNLOADED -> {
+                    FileState.DOWNLOADED -> {
                         val now = SystemClock.elapsedRealtime()
                         if (now - lastOpenAt >= 1500) {
                             lastOpenAt = now
@@ -165,25 +194,42 @@ class DownloadsFilesFragment : TSFragment() {
                         }
                     }
 
-                    State.PROGRESS -> confirmCancelDownload(row)
+                    FileState.PROGRESS -> confirmCancelDownload(row)
 
-                    State.SKIPPED -> resumeDownload(row)
+                    FileState.SKIPPED -> resumeDownload(row)
 
-                    State.ENABLING, State.DELETING -> {} // already on its way
+                    FileState.UNKNOWN -> App.toast(staleMessage(), true)
+
+                    FileState.ENABLING, FileState.DELETING -> {} // already on its way
                 }
             }
             setOnItemLongClickListener { _, _, position, _ ->
                 val row = filesAdapter.getItem(position) as Row? ?: return@setOnItemLongClickListener true
                 when (row.state) {
-                    State.DOWNLOADED -> showDownloadedMenu(row)
+                    FileState.DOWNLOADED -> showDownloadedMenu(row)
 
-                    State.PROGRESS -> confirmCancelDownload(row)
+                    FileState.PROGRESS -> confirmCancelDownload(row)
 
-                    State.SKIPPED, State.ENABLING, State.DELETING -> {}
+                    FileState.UNKNOWN -> App.toast(staleMessage(), true)
+
+                    FileState.SKIPPED, FileState.ENABLING, FileState.DELETING -> {}
                 }
                 true
             }
         }
+    }
+
+    private fun staleMessage(): String {
+        val reason = staleReason
+        val base = getString(R.string.qbit_data_stale)
+        return if (reason.isEmpty()) base else "$base: $reason"
+    }
+
+    private fun destructiveReady(): Boolean {
+        if (dataValid && torrIdentified)
+            return true
+        App.toast(staleMessage(), true)
+        return false
     }
 
     override fun onResume() {
@@ -204,49 +250,65 @@ class DownloadsFilesFragment : TSFragment() {
         super.onPause()
     }
 
-    private suspend fun load(quiet: Boolean) {
+    private suspend fun load(quiet: Boolean) = loadMutex.withLock { loadLocked(quiet) }
+
+    private suspend fun loadLocked(quiet: Boolean) {
         if (!quiet) showProgress()
         try {
-            var torrmediaAvailable = true
-            val torrmediaItems = try {
-                TorrmediaApi.list()
+            var problem = ""
+            val torrmediaResp = try {
+                TorrmediaApi.list().also { lastTorrmediaItems = it.items }
             } catch (e: Exception) {
-                torrmediaAvailable = false
-                emptyList()
+                problem = App.context.getString(R.string.qbit_stale_mm)
+                null
             }
-            // qBit powers the "in progress"/"skipped" states — never swallow its failure silently
-            var qbitProblem = ""
+            val torrmediaItems = torrmediaResp?.items ?: lastTorrmediaItems
+            var qbitLookupOk = false
             val torrents = if (Settings.getQbitEnabled()) {
                 try {
-                    QbitApi.listTorrents().also { qbitLookupAvailable = true }
+                    QbitApi.listTorrents().also { qbitLookupOk = true }
                 } catch (e: Exception) {
-                    qbitLookupAvailable = false
-                    // include the dialed URL: separates "wrong address in settings" from "blocked port"
-                    qbitProblem = "${e.message ?: e.toString()} @ ${Settings.getQbitUrl()}"
-                    Log.e("QbitFork", "files screen: qbit list failed: $qbitProblem")
+                    if (problem.isEmpty())
+                        problem = "${App.context.getString(R.string.qbit_stale_qbit)}: ${e.message ?: e.toString()}"
+                    Log.e("QbitFork", "files screen: qbit list failed: ${e.message ?: e.toString()}")
                     emptyList()
                 }
             } else {
-                qbitLookupAvailable = false
-                qbitProblem = "qBittorrent is off in settings"
+                if (problem.isEmpty())
+                    problem = App.context.getString(R.string.qbit_stale_qbit_off)
                 emptyList()
             }
+            if (torrmediaResp != null && !torrmediaResp.qbitAvailable && problem.isEmpty())
+                problem = App.context.getString(R.string.qbit_stale_qbit)
 
-            val torrent: QbitTorrent? = when (mode) {
-                MODE_QBIT -> torrents.find { it.hash == id }
-                else -> torrents.find { matchesShelfItem(it.contentPath, id) }
-            }
-            if (torrent == null && qbitProblem.isEmpty() && torrents.isNotEmpty())
-                qbitProblem = "no qBit torrent for \"$id\""
-            if (!quiet && qbitProblem.isNotEmpty())
-                App.toast("qBit: $qbitProblem", true)
-            Log.i("QbitFork", "files screen: mode=$mode id=$id torrents=${torrents.size} matched=${torrent?.name ?: "-"}")
-            torrHash = torrent?.hash ?: ""
-            torrState = torrent?.state ?: ""
             val torrmediaItem = when (mode) {
                 MODE_MEDIA -> torrmediaItems.find { it.path == id }
-                else -> torrent?.let { t -> torrmediaItems.find { matchesShelfItem(t.contentPath, it.path) } }
+                else -> resolveSingleByHash(id, torrmediaItems) { it.torrentHash }
             }
+            val wantHash = when (mode) {
+                MODE_QBIT -> id
+                else -> torrmediaItem?.torrentHash ?: ""
+            }
+            val torrent: QbitTorrent? = resolveSingleByHash(wantHash, torrents) { it.hash }
+            torrIdentified = when {
+                mode == MODE_QBIT -> torrent != null
+                torrmediaItem == null -> false
+                wantHash.isEmpty() -> true
+                else -> torrent != null
+            }
+            val needsQbit = needsQbitBackend(mode == MODE_QBIT, (torrmediaItem?.files ?: emptyList()).map { it.owner })
+            dataValid = screenDataValid(
+                needsQbit = needsQbit,
+                torrmediaFresh = torrmediaResp != null,
+                qbitAvailable = torrmediaResp?.qbitAvailable == true,
+                qbitLookupOk = qbitLookupOk,
+            )
+            if (!needsQbit) problem = "" 
+            staleReason = problem
+            if (!quiet && !dataValid && problem.isNotEmpty())
+                App.toast(problem, true)
+            torrHash = torrent?.hash ?: ""
+            torrState = torrent?.state ?: ""
             val torrmediaFiles = torrmediaItem?.files ?: emptyList()
             val allTorrmediaFiles = torrmediaItems.flatMap { it.files }
             torrItemPath = when {
@@ -288,22 +350,29 @@ class DownloadsFilesFragment : TSFragment() {
                         .filter { it.isNotEmpty() }
                         .map { it.trimStart('/') }
                         .distinct()
-                    val torrmediaMatch = torrmediaFiles.find { it.path.endsWith("/${f.name}") || it.path == f.name }
-                        ?: allTorrmediaFiles.find { it.path in pathCandidates }
+                    val exact = torrmediaFiles.filter { ownedBy(it, torrent.hash) && it.qbitFileId == f.index }
+                    val torrmediaMatch = if (exact.size == 1) exact[0] else
+                        torrmediaFiles.find { matchesFileName(it.path, f.name) }
+                            ?: allTorrmediaFiles.find { it.path in pathCandidates }
                     val viewedMatch = pathCandidates.firstNotNullOfOrNull { viewedByPath[it] }
                     // the shelf decides, not qBit's piece map (it calls deleted files complete until
                     // a recheck, docs/09) — but a file qBit just created is on disk yet still empty,
                     // so the size on disk must also have caught up with the expected one
-                    val ready = torrmediaMatch != null && torrmediaMatch.size >= f.size
-                    val state = when {
-                        f.index in deleting && (f.priority != 0 || ready) -> State.DELETING
-                        ready -> State.DOWNLOADED
-                        f.priority == 0 -> {
-                            deleting.remove(f.index)
-                            if (f.index in enabling) State.ENABLING else State.SKIPPED
-                        }
-                        else -> State.PROGRESS
-                    }
+                    val ready = fileReady(
+                        exactShelfSize = if (exact.size == 1) exact[0].size else null,
+                        fallbackShelfSize = torrmediaMatch?.size,
+                        expectedSize = f.size,
+                        qbitProgress = f.progress,
+                    )
+                    if (f.priority == 0)
+                        deleting.remove(f.index)
+                    val state = classifyFileState(
+                        dataValid = dataValid,
+                        ready = ready,
+                        skipped = f.priority == 0,
+                        deleting = f.index in deleting,
+                        enabling = f.index in enabling,
+                    )
                     Row(
                         name = File(f.name).name,
                         torrmediaPath = torrmediaMatch?.path ?: pathCandidates.first(),
@@ -315,45 +384,21 @@ class DownloadsFilesFragment : TSFragment() {
                         checking = qbitIsChecking(torrent.state),
                         watch = torrmediaMatch?.watchState ?: viewedMatch?.watch ?: TorrmediaWatch.NONE,
                         pos = torrmediaMatch?.pos ?: viewedMatch?.pos ?: 0,
+                        identified = torrIdentified && f.index >= 0,
                     )
                 }
-                // files that exist on the shelf but are unknown to the live torrent (edge case)
-                val extras = torrmediaFiles.filter { mf -> qFiles.none { qf -> mf.path.endsWith("/${qf.name}") } }
-                    .map {
-                        Row(
-                            it.name.ifBlank { File(it.path).name },
-                            it.path,
-                            it.size,
-                            100,
-                            State.DOWNLOADED,
-                            -1,
-                            watch = if (it.watchState != TorrmediaWatch.NONE) it.watchState
-                            else viewedByPath[it.path]?.watch ?: TorrmediaWatch.NONE,
-                            pos = it.pos.takeIf { pos -> pos > 0 } ?: viewedByPath[it.path]?.pos ?: 0,
-                        )
-                    }
+                val extras = torrmediaFiles.filter { mf -> qFiles.none { qf -> matchesFileName(mf.path, qf.name) } }
+                    .map { shelfRow(it, viewedByPath) }
                 qRows + extras
             } else {
                 // torrent is gone from qBittorrent — plain shelf view, everything playable
-                torrmediaFiles.map {
-                    Row(
-                        it.name.ifBlank { File(it.path).name },
-                        it.path,
-                        it.size,
-                        100,
-                        State.DOWNLOADED,
-                        -1,
-                        watch = if (it.watchState != TorrmediaWatch.NONE) it.watchState
-                        else viewedByPath[it.path]?.watch ?: TorrmediaWatch.NONE,
-                        pos = it.pos.takeIf { pos -> pos > 0 } ?: viewedByPath[it.path]?.pos ?: 0,
-                    )
-                }
+                torrmediaFiles.map { shelfRow(it, viewedByPath) }
             }
             lastRows = rows
             withContext(Dispatchers.Main) {
                 filesAdapter.update(rows)
                 showInfo(torrent, rows)
-                if (!focusApplied && torrmediaAvailable && rows.isNotEmpty()) {
+                if (!focusApplied && torrmediaResp != null && rows.isNotEmpty()) {
                     val started = rows.indexOfFirst { it.watch == TorrmediaWatch.STARTED }
                     val untouched = rows.indexOfFirst { it.watch == TorrmediaWatch.NONE }
                     val position = when {
@@ -371,6 +416,33 @@ class DownloadsFilesFragment : TSFragment() {
         }
         if (!quiet) hideProgress()
     }
+
+    private fun ownedBy(file: TorrmediaFile, hash: String): Boolean =
+        file.torrentHash.isNotEmpty() && normalizeHash(file.torrentHash) == normalizeHash(hash) &&
+                file.qbitFileId >= 0
+
+    private fun matchesFileName(torrmediaPath: String, qbitName: String): Boolean =
+        torrmediaPath == qbitName || torrmediaPath.endsWith("/$qbitName")
+
+    private fun shelfRow(file: TorrmediaFile, viewedByPath: Map<String, TorrmediaViewed>): Row =
+        Row(
+            name = file.name.ifBlank { File(file.path).name },
+            torrmediaPath = file.path,
+            size = file.size,
+            pct = 100,
+            state = classifyFileState(
+                dataValid = dataValid,
+                ready = true,
+                skipped = false,
+                deleting = false,
+                enabling = false,
+            ),
+            qbitIndex = -1,
+            watch = if (file.watchState != TorrmediaWatch.NONE) file.watchState
+            else viewedByPath[file.path]?.watch ?: TorrmediaWatch.NONE,
+            pos = file.pos.takeIf { pos -> pos > 0 } ?: viewedByPath[file.path]?.pos ?: 0,
+            identified = true,
+        )
 
     /// Torrent card in the header, laid out like the TorrServer info card (docs/08 parity):
     /// every value comes from the same torrents/info call, no extra endpoints
@@ -394,11 +466,11 @@ class DownloadsFilesFragment : TSFragment() {
             }
         }
 
-        val done = rows.count { it.state == State.DOWNLOADED }
+        val done = rows.count { it.state == FileState.DOWNLOADED }
         val total = torrent?.size ?: rows.sumOf { it.size }
         // "completed" counts the selected files only; "downloaded" includes deselected leftovers
         // and can exceed the torrent size, which is where the >100% came from
-        val ready = torrent?.completed ?: rows.filter { it.state == State.DOWNLOADED }.sumOf { it.size }
+        val ready = torrent?.completed ?: rows.filter { it.state == FileState.DOWNLOADED }.sumOf { it.size }
         val pct = ((torrent?.progress ?: 1.0) * 100).toInt().coerceIn(0, 100)
         val checking = torrent != null && qbitIsChecking(torrent.state)
         val inProgress = torrent != null && pct < 100 && !checking
@@ -406,8 +478,9 @@ class DownloadsFilesFragment : TSFragment() {
         // headline: state · percent · bytes · files, state highlighted with the accent colour
         // qBit keeps "completed" and zero amount_left after a skipped file is switched back on
         val staleComplete = torrent != null && !checking && torrent.amountLeft == 0L &&
-                rows.any { it.state == State.PROGRESS }
+                rows.any { it.state == FileState.PROGRESS }
         val status = when {
+            !dataValid -> getString(R.string.qbit_data_stale)
             torrent == null -> getString(R.string.qbit_shelf_only)
             staleComplete -> getString(R.string.qbit_status_download_waiting_sources)
             else -> qbitHeaderStatusLabel(torrent.state)
@@ -495,7 +568,7 @@ class DownloadsFilesFragment : TSFragment() {
             }
         }
         vi.findViewById<Button>(R.id.btnQbitDeleteTorrent)?.isEnabled =
-            !checking && torrent?.state?.equals("moving", true) != true
+            dataValid && torrIdentified && !checking && torrent?.state?.equals("moving", true) != true
     }
 
     /// Runs a qBit command with instant UI feedback: actions lock, the progress bar runs, and the
@@ -503,6 +576,7 @@ class DownloadsFilesFragment : TSFragment() {
     private fun runQbitAction(
         settled: (() -> Boolean)? = null,
         onFailure: (() -> Unit)? = null,
+        onFinally: (() -> Unit)? = null,
         action: suspend () -> Unit,
     ) {
         activeActions.incrementAndGet()
@@ -520,7 +594,7 @@ class DownloadsFilesFragment : TSFragment() {
                 load(quiet = true)
                 if (settled?.invoke() == true) break
             }
-            enabling.clear()
+            onFinally?.invoke()
             val lastAction = activeActions.decrementAndGet() == 0
             load(quiet = true) // the last one repaints buttons and rows with the real state
             if (lastAction) {
@@ -534,7 +608,8 @@ class DownloadsFilesFragment : TSFragment() {
         view?.findViewById<Button>(R.id.btnQbitPause)?.isEnabled =
             enabled && headerActionFor(torrState) != null
         view?.findViewById<Button>(R.id.btnQbitDeleteTorrent)?.isEnabled =
-            enabled && !qbitIsChecking(torrState) && !torrState.equals("moving", true)
+            enabled && dataValid && torrIdentified &&
+                    !qbitIsChecking(torrState) && !torrState.equals("moving", true)
     }
 
     private fun headerActionFor(state: String): HeaderAction? =
@@ -581,11 +656,36 @@ class DownloadsFilesFragment : TSFragment() {
         }
     }
 
+    private fun snapshotOf(row: Row): FileOpSnapshot =
+        FileOpSnapshot(
+            hash = if (row.qbitIndex >= 0) torrHash else "",
+            qbitFileId = row.qbitIndex,
+            path = row.torrmediaPath,
+            size = row.size,
+        )
+
+    private fun currentSnapshotFor(snapshot: FileOpSnapshot): FileOpSnapshot? {
+        val row = lastRows.find { it.torrmediaPath == snapshot.path } ?: return null
+        if (!row.identified)
+            return null
+        return FileOpSnapshot(
+            hash = if (row.qbitIndex >= 0) torrHash else "",
+            qbitFileId = row.qbitIndex,
+            path = row.torrmediaPath,
+            size = row.size,
+        )
+    }
+
     private fun confirmCancelDownload(row: Row) {
+        if (!destructiveAllowed(row.state, dataValid, row.identified)) {
+            App.toast(staleMessage(), true)
+            return
+        }
+        val snapshot = snapshotOf(row)
         AlertDialog.Builder(requireContext())
             .setTitle(R.string.qbit_cancel_download)
             .setMessage("${row.name}\n\n${getString(R.string.qbit_cancel_download_confirm)}")
-            .setPositiveButton(android.R.string.ok) { _, _ -> queueFileDelete(row) }
+            .setPositiveButton(android.R.string.ok) { _, _ -> queueFileDelete(snapshot) }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
@@ -607,10 +707,15 @@ class DownloadsFilesFragment : TSFragment() {
     }
 
     private fun confirmDeleteFile(row: Row) {
+        if (!destructiveAllowed(row.state, dataValid, row.identified)) {
+            App.toast(staleMessage(), true)
+            return
+        }
+        val snapshot = snapshotOf(row)
         AlertDialog.Builder(requireContext())
             .setTitle(R.string.qbit_delete_file)
             .setMessage("${row.name}\n\n${getString(R.string.qbit_delete_file_confirm)}")
-            .setPositiveButton(android.R.string.ok) { _, _ -> deleteFile(row) }
+            .setPositiveButton(android.R.string.ok) { _, _ -> queueFileDelete(snapshot) }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
@@ -639,49 +744,77 @@ class DownloadsFilesFragment : TSFragment() {
             App.toast(R.string.qbit_resume_failed, true)
             return
         }
+        if (!dataValid || !row.identified) {
+            App.toast(staleMessage(), true)
+            return
+        }
+        val snapshot = snapshotOf(row)
         // paint the row as "enabling" before the first request leaves the device
         enabling.add(row.qbitIndex)
-        filesAdapter.update(lastRows.map { if (it.qbitIndex == row.qbitIndex) it.copy(state = State.ENABLING) else it })
-        runQbitAction(settled = { lastRows.find { it.qbitIndex == row.qbitIndex }?.state == State.PROGRESS }) {
-            when (QbitApi.enableFile(hash, row.qbitIndex)) {
+        filesAdapter.update(lastRows.map { if (it.qbitIndex == row.qbitIndex) it.copy(state = FileState.ENABLING) else it })
+        runQbitAction(
+            settled = { lastRows.find { it.qbitIndex == row.qbitIndex }?.state == FileState.PROGRESS },
+            onFinally = { enabling.remove(row.qbitIndex) },
+        ) {
+            if (!revalidate(snapshot))
+                return@runQbitAction
+            val outcome = QbitApi.enableFile(hash, row.qbitIndex)
+            when (outcome.result) {
                 QbitApi.EnableResult.STARTED -> App.toast(R.string.qbit_resume_started)
                 QbitApi.EnableResult.STALLED -> App.toast(R.string.qbit_stalled_warn, true)
                 QbitApi.EnableResult.BUSY_CHECKING -> App.toast(R.string.qbit_resume_failed, true)
             }
+            showWarnings(outcome.warnings)
         }
     }
 
-    private fun deleteFile(row: Row) {
-        queueFileDelete(row)
+    private suspend fun revalidate(snapshot: FileOpSnapshot): Boolean {
+        load(quiet = true)
+        val current = loadMutex.withLock { currentSnapshotFor(snapshot) }
+        if (dataValid && snapshotStillValid(snapshot, current))
+            return true
+        App.toast(App.context.getString(R.string.qbit_file_changed), true)
+        return false
     }
 
-    private fun queueFileDelete(row: Row) {
-        val hash = torrHash
-        val exactQbitFile = hash.isNotEmpty() && row.qbitIndex >= 0
+    private fun showWarnings(warnings: List<String>) {
+        if (warnings.isEmpty())
+            return
+        App.toast(warnings.joinToString("\n"), true)
+    }
+
+    private fun queueFileDelete(snapshot: FileOpSnapshot) {
+        val exactQbitFile = snapshot.hash.isNotEmpty() && snapshot.qbitFileId >= 0
         if (exactQbitFile) {
-            deleting.add(row.qbitIndex)
+            deleting.add(snapshot.qbitFileId)
             lastRows = lastRows.map {
-                if (it.qbitIndex == row.qbitIndex) it.copy(state = State.DELETING) else it
+                if (it.qbitIndex == snapshot.qbitFileId) it.copy(state = FileState.DELETING) else it
             }
             filesAdapter.update(lastRows)
         }
         runQbitAction(
             settled = {
                 if (exactQbitFile)
-                    lastRows.find { it.qbitIndex == row.qbitIndex }?.state == State.SKIPPED
+                    lastRows.find { it.qbitIndex == snapshot.qbitFileId }?.state == FileState.SKIPPED
                 else
-                    lastRows.none { it.torrmediaPath == row.torrmediaPath && it.state == State.DOWNLOADED }
+                    lastRows.none { it.torrmediaPath == snapshot.path && it.state == FileState.DOWNLOADED }
             },
             onFailure = {
                 if (exactQbitFile)
-                    deleting.remove(row.qbitIndex)
+                    deleting.remove(snapshot.qbitFileId)
             },
         ) {
-            if (exactQbitFile)
-                TorrmediaApi.deleteTorrentFile(hash, row.qbitIndex)
+            if (!revalidate(snapshot)) {
+                if (exactQbitFile)
+                    deleting.remove(snapshot.qbitFileId)
+                return@runQbitAction
+            }
+            val warnings = if (exactQbitFile)
+                TorrmediaApi.deleteTorrentFile(snapshot.hash, snapshot.qbitFileId)
             else
-                TorrmediaApi.deleteFile(row.torrmediaPath)
+                TorrmediaApi.deleteFile(snapshot.path)
             App.toast(R.string.qbit_deleted)
+            showWarnings(warnings)
         }
     }
 
@@ -690,18 +823,25 @@ class DownloadsFilesFragment : TSFragment() {
         lifecycleScope.launch(Dispatchers.IO) {
             showProgress()
             try {
+                load(quiet = true)
+                if (!dataValid || !torrIdentified)
+                    throw IllegalStateException(staleMessage())
                 val itemPath = torrItemPath.ifEmpty { if (mode == MODE_MEDIA) id else "" }
+                val warnings = mutableListOf<String>()
                 if (torrHash.isNotEmpty()) {
                     QbitApi.deleteTorrent(torrHash, true)
                 } else {
-                    if (Settings.getQbitEnabled() && !qbitLookupAvailable)
-                        throw IllegalStateException("qBittorrent lookup is unavailable")
-                    val item = TorrmediaApi.list().find { it.path == id }
-                    item?.files?.forEach { TorrmediaApi.deleteFile(it.path) }
+                    val items = TorrmediaApi.list().items
+                    val item = when (mode) {
+                        MODE_QBIT -> resolveSingleByHash(id, items) { it.torrentHash }
+                        else -> items.find { it.path == id }
+                    } ?: throw IllegalStateException(App.context.getString(R.string.qbit_item_not_found))
+                    item.files.forEach { warnings += TorrmediaApi.deleteFile(it.path) }
                 }
                 if (itemPath.isNotEmpty())
                     TorrmediaApi.remViewedItem(itemPath)
                 App.toast(R.string.qbit_deleted)
+                showWarnings(warnings)
                 withContext(Dispatchers.Main) {
                     parentFragmentManager.popBackStack()
                 }
@@ -786,8 +926,7 @@ class DownloadsFilesFragment : TSFragment() {
                 visibility = if (row.watch == TorrmediaWatch.NONE) View.GONE else View.VISIBLE
                 alpha = if (row.watch == TorrmediaWatch.STARTED) 0.45f else 1.0f
             }
-            // ready episodes carry a green chip (theme colour) instead of a check mark
-            val chipColor = if (row.state == State.DOWNLOADED)
+            val chipColor = if (row.state == FileState.DOWNLOADED)
                 ThemeUtil.getColorFromAttr(themedContext, R.attr.colorDone)
             else
                 colorBright
@@ -795,7 +934,7 @@ class DownloadsFilesFragment : TSFragment() {
                 text = when (row.state) {
                     // a rechecked episode keeps its green chip and stays playable,
                     // the check progress is just shown next to the size
-                    State.DOWNLOADED ->
+                    FileState.DOWNLOADED ->
                         if (row.checking && row.pct < 100)
                             "${Format.byteFmt(row.size)} ● ${row.label} ${row.pct}%"
                         else {
@@ -805,12 +944,13 @@ class DownloadsFilesFragment : TSFragment() {
                             } else ""
                             Format.byteFmt(row.size) + playbackPosition
                         }
-                    State.PROGRESS ->
+                    FileState.PROGRESS ->
                         if (row.label.isEmpty()) "${Format.byteFmt(row.size)} ● ${row.pct}%"
                         else "${Format.byteFmt(row.size)} ● ${row.label} ${row.pct}%"
-                    State.ENABLING -> "${Format.byteFmt(row.size)} ● ${vi.context.getString(R.string.qbit_enabling)}"
-                    State.DELETING -> "${Format.byteFmt(row.size)} ● ${vi.context.getString(R.string.qbit_deleting)}"
-                    State.SKIPPED -> "${Format.byteFmt(row.size)} ● ${vi.context.getString(R.string.qbit_skipped)}"
+                    FileState.ENABLING -> "${Format.byteFmt(row.size)} ● ${vi.context.getString(R.string.qbit_enabling)}"
+                    FileState.DELETING -> "${Format.byteFmt(row.size)} ● ${vi.context.getString(R.string.qbit_deleting)}"
+                    FileState.SKIPPED -> "${Format.byteFmt(row.size)} ● ${vi.context.getString(R.string.qbit_skipped)}"
+                    FileState.UNKNOWN -> "${Format.byteFmt(row.size)} ● ${vi.context.getString(R.string.qbit_state_no_data)}"
                 }
                 val shapeDrawable = MaterialShapeDrawable(shapeAppearanceModel)
                 shapeDrawable.fillColor = ColorStateList.valueOf(chipColor).withAlpha(240)
@@ -819,9 +959,9 @@ class DownloadsFilesFragment : TSFragment() {
                 setTextColor(ThemeUtil.getColorFromAttr(themedContext, R.attr.colorSurface))
             }
             vi.alpha = when (row.state) {
-                State.DOWNLOADED -> 1.0f
-                State.PROGRESS, State.ENABLING, State.DELETING -> 0.6f
-                State.SKIPPED -> 0.4f
+                FileState.DOWNLOADED -> 1.0f
+                FileState.PROGRESS, FileState.ENABLING, FileState.DELETING, FileState.UNKNOWN -> 0.6f
+                FileState.SKIPPED -> 0.4f
             }
             return vi
         }

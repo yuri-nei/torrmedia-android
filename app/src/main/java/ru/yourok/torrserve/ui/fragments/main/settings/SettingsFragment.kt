@@ -155,7 +155,6 @@ class SettingsFragment : PreferenceFragmentCompat() {
             val ctx = requireActivity()
             lifecycleScope.launch(Dispatchers.IO) {
                 val report = NetDiag.run()
-                Log.i("QbitFork", "netdiag:\n$report")
                 withContext(Dispatchers.Main) {
                     AlertDialog.Builder(ctx)
                         .setTitle(R.string.qbit_test_title)

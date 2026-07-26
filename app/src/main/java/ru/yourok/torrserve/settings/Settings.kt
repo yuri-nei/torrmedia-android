@@ -68,7 +68,7 @@ object Settings {
 
     fun getQbitUser(): String = get("qbit_user", "")
     fun getQbitPass(): String = get("qbit_pass", "")
-    fun getQbitCategory(): String = get("qbit_category", "Shows").trim()
+    fun getQbitCategory(): String = get("qbit_category", "").trim()
 
     fun getTorrmediaUrl(): String = withHttpScheme(get("torrmedia_url", ""))
 
