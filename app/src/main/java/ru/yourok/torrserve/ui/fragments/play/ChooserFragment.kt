@@ -1,5 +1,6 @@
 package ru.yourok.torrserve.ui.fragments.play
 
+import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -30,7 +31,7 @@ class ChooserFragment : TSFragment() {
 
         this.onResult = {
             val action = (it as Int)
-            if (action in 1..3)
+            if (action in 1..4)
                 onChoose(action)
 
             activity.commitFragment {
@@ -68,6 +69,17 @@ class ChooserFragment : TSFragment() {
                 lifecycleScope.launch {
                     onResult?.invoke(3)
                     saveAction(3)
+                }
+            }
+            findViewById<CardView>(R.id.cvQbit)?.apply {
+                val link = (activity as? PlayActivity)?.torrentLink ?: ""
+                val scheme = Uri.parse(link).scheme?.lowercase() ?: ""
+                if (Settings.getQbitEnabled() && scheme in listOf("magnet", "http", "https"))
+                    visibility = View.VISIBLE
+                setOnClickListener {
+                    lifecycleScope.launch {
+                        onResult?.invoke(4) // qBit choice is intentionally never saved as default
+                    }
                 }
             }
             findViewById<CardView>(R.id.cvPlayer)?.setOnClickListener {

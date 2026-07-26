@@ -83,7 +83,7 @@ class TorrService : Service() {
             if (serverFile.exists() && isLocal() && Api.echo().isEmpty()) {
                 if (needForeground) { // fix start local server on boot
                     val builder = NotificationCompat.Builder(this@TorrService, NotificationTS().channelId)
-                        .setSmallIcon(R.mipmap.ic_launcher)
+                        .setSmallIcon(R.drawable.ts_icon_white)
                         .setContentTitle(getString(R.string.app_name))
                         .setContentText("Start Foreground")
                         .setPriority(NotificationCompat.PRIORITY_DEFAULT)

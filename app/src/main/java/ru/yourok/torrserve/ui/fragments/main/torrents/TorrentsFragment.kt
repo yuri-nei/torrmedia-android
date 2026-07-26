@@ -21,6 +21,7 @@ import ru.yourok.torrserve.server.models.torrent.Torrent
 import ru.yourok.torrserve.settings.Settings
 import ru.yourok.torrserve.ui.activities.play.PlayActivity
 import ru.yourok.torrserve.ui.fragments.TSFragment
+import ru.yourok.torrserve.ui.fragments.qbit.DownloadsFilesFragment
 import ru.yourok.torrserve.utils.TorrentHelper
 
 
@@ -41,6 +42,16 @@ class TorrentsFragment : TSFragment() {
             lvTorrents.adapter = torrentAdapter
             lvTorrents.setOnItemClickListener { _, _, i, _ ->
                 val torr = torrentAdapter?.getItem(i) as Torrent
+                if (torr.src == "media") { // hash carries the torrmedia item path
+                    DownloadsFilesFragment.newMedia(torr.hash, torr.title.ifBlank { torr.name })
+                        .show(requireActivity(), R.id.container, true)
+                    return@setOnItemClickListener
+                }
+                if (torr.src == "qbit") {
+                    DownloadsFilesFragment.newQbit(torr.hash, torr.title.ifBlank { torr.name })
+                        .show(requireActivity(), R.id.container, true)
+                    return@setOnItemClickListener
+                }
                 val intent = Intent(App.context, PlayActivity::class.java)
                 intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 intent.action = Intent.ACTION_VIEW
@@ -152,6 +163,8 @@ class TorrentsFragment : TSFragment() {
                         val itemPosition = lv.selectedItemPosition
                         if (itemPosition in torrentAdapter!!.list.indices) {
                             torrentAdapter!!.list[itemPosition].let {
+                                if (it.src != null) // FFP info is a TorrServer-only feature
+                                    return@let
                                 lifecycleScope.launch(Dispatchers.IO) {
                                     val torrent = TorrentHelper.waitFiles(it.hash) ?: let {
                                         return@launch

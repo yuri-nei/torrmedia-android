@@ -25,7 +25,11 @@ object PlayersDialog {
         val mime = Mime.getMimeType(file.path)
         val intent = Intent(Intent.ACTION_VIEW)
         intent.setDataAndType(link.toUri(), mime)
+        show(context, intent, onSelect)
+    }
 
+    /// torrmedia: the same picker for any prepared ACTION_VIEW intent (torrmedia playback uses it)
+    fun show(context: Context, intent: Intent, onSelect: (player: String) -> Unit) {
         val resInfo =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 App.context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_ALL)

@@ -62,6 +62,23 @@ object Settings {
     fun getChooserAction(): Int = get("chooser_action", 0)
     fun setChooserAction(v: Int) = set("chooser_action", v)
 
+    // qBittorrent remote (Qbit fork)
+    fun getQbitEnabled(): Boolean = get("qbit_enabled", false)
+    fun getQbitUrl(): String = withHttpScheme(get("qbit_url", ""))
+
+    fun getQbitUser(): String = get("qbit_user", "")
+    fun getQbitPass(): String = get("qbit_pass", "")
+    fun getQbitCategory(): String = get("qbit_category", "Shows").trim()
+
+    fun getTorrmediaUrl(): String = withHttpScheme(get("torrmedia_url", ""))
+
+    private fun withHttpScheme(raw: String): String {
+        val url = raw.trim().trimEnd('/')
+        if (url.isEmpty() || url.startsWith("http://", true) || url.startsWith("https://", true))
+            return url
+        return "http://$url"
+    }
+
     fun isAccessibilityOn(): Boolean = get("switch_accessibility", false)
     fun isDisableAccessibilityOnServerSwitchOn(): Boolean = get("switch_disable_accessibility_on_server_switch", true)
     fun isBootStart(): Boolean = get("boot_start", false)

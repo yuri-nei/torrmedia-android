@@ -1,5 +1,6 @@
 package ru.yourok.torrserve.ui.fragments.main.torrents
 
+import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -9,12 +10,119 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.yourok.torrserve.server.api.Api
+import ru.yourok.torrserve.server.api.TorrmediaItem
+import ru.yourok.torrserve.server.api.TorrmediaViewed
+import ru.yourok.torrserve.server.api.TorrmediaWatch
+import ru.yourok.torrserve.server.api.TorrmediaApi
+import ru.yourok.torrserve.server.api.QbitApi
+import ru.yourok.torrserve.server.api.QbitTorrent
+import ru.yourok.torrserve.server.api.matchesShelfItem
+import ru.yourok.torrserve.server.api.toUiTorrent
 import ru.yourok.torrserve.server.models.torrent.Torrent
+import ru.yourok.torrserve.settings.Settings
 
 class TorrentsViewModel : ViewModel() {
     private var isWork = Any()
     private var isUpdate = true
     var data: MutableLiveData<List<Torrent>>? = null
+
+    private var torrmediaRaw: List<TorrmediaItem> = emptyList()
+    private var viewedRaw: List<TorrmediaViewed> = emptyList()
+    private var qbitRaw: List<QbitTorrent> = emptyList()
+    private val qbitFileTotals = mutableMapOf<String, Int>()
+    private var downloadsCache: List<Torrent> = emptyList()
+    private var remoteTick = 0
+
+    private fun inferredItemPath(torrent: QbitTorrent): String {
+        val category = torrent.savePath.trimEnd('/').substringAfterLast('/')
+        val content = torrent.contentPath.trimEnd('/').substringAfterLast('/')
+        return listOf(category, content).filter { it.isNotEmpty() }.joinToString("/")
+    }
+
+    private fun applyWatchSummary(
+        ui: Torrent,
+        itemPath: String,
+        physicalPaths: Collection<String>,
+        qbitTotal: Int,
+    ) {
+        val viewed = viewedRaw.filter { it.item == itemPath }
+        ui.watchedFiles = viewed.count { it.watch == TorrmediaWatch.WATCHED }
+        ui.startedFiles = viewed.count { it.watch == TorrmediaWatch.STARTED }
+        ui.mediaFiles = maxOf(qbitTotal, (physicalPaths + viewed.map { it.path }).distinct().size)
+        ui.mediaItemPath = itemPath
+    }
+
+    private fun downloadItems(): List<Torrent> {
+        if (remoteTick == 0) {
+            if (Settings.getTorrmediaUrl().isNotEmpty()) {
+                try {
+                    torrmediaRaw = TorrmediaApi.list()
+                } catch (e: Exception) {
+                    // keep the previous snapshot, torrmedia may be temporarily unreachable
+                    Log.e("QbitFork", "torrmedia list failed: ${e.message}")
+                }
+                try {
+                    viewedRaw = TorrmediaApi.listViewed()
+                } catch (e: Exception) {
+                    // Keep viewed history across a temporary torrmedia outage too.
+                    Log.e("QbitFork", "torrmedia viewed failed: ${e.message}")
+                }
+            } else {
+                torrmediaRaw = emptyList()
+                viewedRaw = emptyList()
+            }
+            if (Settings.getQbitEnabled()) {
+                try {
+                    qbitRaw = QbitApi.listTorrents()
+                } catch (e: Exception) {
+                    // keep the previous snapshot, qBit may be temporarily unreachable
+                    Log.e("QbitFork", "qbit list failed: ${e.message}")
+                }
+            } else {
+                qbitRaw = emptyList()
+                qbitFileTotals.clear()
+            }
+
+            val liveHashes = qbitRaw.map { it.hash }.toSet()
+            qbitFileTotals.keys.retainAll(liveHashes)
+            qbitRaw.forEach { torrent ->
+                if ((qbitFileTotals[torrent.hash] ?: 0) == 0) {
+                    try {
+                        qbitFileTotals[torrent.hash] = QbitApi.getFiles(torrent.hash).size
+                    } catch (e: Exception) {
+                        // File count is immutable once metadata arrives; retry on the next remote tick.
+                        Log.e("QbitFork", "qbit files count failed for ${torrent.hash}: ${e.message}")
+                    }
+                }
+            }
+
+            val shelf = torrmediaRaw.map { item ->
+                val ui = item.toUiTorrent()
+                val live = qbitRaw.find { matchesShelfItem(it.contentPath, item.path) }
+                live?.let { t ->
+                    // the shelf row shows live download state instead of a second row for the torrent
+                    ui.stat_string = t.state
+                    ui.torrent_size = t.size
+                    ui.loaded_size = t.completed
+                }
+                applyWatchSummary(ui, item.path, item.files.map { it.path }, live?.let { qbitFileTotals[it.hash] } ?: 0)
+                ui
+            }
+            val qbitOnly = qbitRaw
+                .filter { t -> torrmediaRaw.none { matchesShelfItem(t.contentPath, it.path) } }
+                .map { torrent ->
+                    val ui = torrent.toUiTorrent()
+                    val itemPath = viewedRaw.map { it.item }.distinct()
+                        .find { matchesShelfItem(torrent.contentPath, it) }
+                        ?: inferredItemPath(torrent)
+                    applyWatchSummary(ui, itemPath, emptyList(), qbitFileTotals[torrent.hash] ?: 0)
+                    ui
+                }
+            downloadsCache = shelf + qbitOnly
+        }
+        remoteTick = (remoteTick + 1) % 5
+        return downloadsCache
+    }
 
     fun getData(): LiveData<List<Torrent>> {
         if (data == null) {
@@ -46,14 +154,23 @@ class TorrentsViewModel : ViewModel() {
                         delay(1000)
                         continue
                     }
-                    val list = Api.listTorrent()
+                    // downloads first: TorrServer being down must not hide the torrmedia/qBit side
+                    val downloads = downloadItems()
+                    val local = try {
+                        Api.listTorrent()
+                    } catch (e: Exception) {
+                        Log.e("QbitFork", "torrserver list failed: ${e.message}")
+                        emptyList()
+                    }
+                    val list = (local + downloads).sortedByDescending { it.timestamp }
                     val oldList = data?.value
                     if (oldList == null || list != oldList)
                         withContext(Dispatchers.Main) { data?.value = list }
                     delay(1000)
                 } catch (e: Exception) {
                     delay(2000)
-                    withContext(Dispatchers.Main) { data?.value = emptyList() }
+                    val fallback = downloadsCache
+                    withContext(Dispatchers.Main) { data?.value = fallback }
                 }
             }
         }

@@ -3,14 +3,19 @@ package ru.yourok.torrserve.ui.activities.play
 import android.content.ContentResolver
 import android.content.Intent
 import android.net.Uri
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import ru.yourok.torrserve.R
 import ru.yourok.torrserve.app.App
 import ru.yourok.torrserve.server.api.Api
+import ru.yourok.torrserve.server.api.QbitApi
 import ru.yourok.torrserve.server.models.torrent.Torrent
+import ru.yourok.torrserve.settings.Settings
 import java.util.Locale
 
 fun PlayActivity.readArgs() {
@@ -68,6 +73,44 @@ fun PlayActivity.addAndExit() {
     }
     torrentHash = ""
     finish()
+}
+
+/// torrmedia: pick a category, push the link to remote qBittorrent and close (no player)
+fun PlayActivity.qbitAndExit() {
+    lifecycleScope.launch(Dispatchers.IO) {
+        showProgress()
+        val categories = QbitApi.getCategories()
+        hideProgress()
+        withContext(Dispatchers.Main) {
+            val default = Settings.getQbitCategory()
+            if (categories.isEmpty()) {
+                // category list unavailable — send with the default one, no extra questions
+                qbitSendAndExit(default)
+            } else {
+                var checked = categories.indexOf(default).coerceAtLeast(0)
+                AlertDialog.Builder(this@qbitAndExit)
+                    .setTitle(R.string.qbit_select_category)
+                    .setSingleChoiceItems(categories.toTypedArray(), checked) { _, which -> checked = which }
+                    .setPositiveButton(android.R.string.ok) { _, _ -> qbitSendAndExit(categories[checked]) }
+                    .setNegativeButton(android.R.string.cancel) { _, _ -> finish() }
+                    .setOnCancelListener { finish() }
+                    .show()
+            }
+        }
+    }
+}
+
+private fun PlayActivity.qbitSendAndExit(category: String) {
+    lifecycleScope.launch(Dispatchers.IO) {
+        showProgress()
+        try {
+            QbitApi.addTorrent(torrentLink, category)
+            App.toast(R.string.qbit_sent)
+        } catch (e: Exception) {
+            App.toast(App.context.getString(R.string.qbit_send_error) + ": " + (e.message ?: ""), true)
+        }
+        withContext(Dispatchers.Main) { finish() }
+    }
 }
 
 fun addTorrent(torrentHash: String, torrentLink: String, torrentTitle: String, torrentPoster: String, torrentCategory: String, torrentData: String, torrentSave: Boolean): Torrent? {

@@ -21,6 +21,9 @@ object UpdaterApk {
     private var newVersion: ApkVersion? = null
 
     fun check(): Boolean {
+        // torrmedia: upstream APK releases have a different signature/appId, updating to them is meaningless
+        if (BuildConfig.APPLICATION_ID != "ru.yourok.torrserve")
+            return false
         try {
             val body = Net.get(Consts.UPDATE_APK_PATH)
             val gson = Gson()

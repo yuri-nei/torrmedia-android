@@ -1,5 +1,6 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <attr name="colorBright" format="reference" />
+    <attr name="colorDone" format="reference" />
     <attr name="colorHost" format="reference" />
     <attr name="colorMainMenu" format="reference" />
     <!-- Base application theme. https://material.io/develop/android/docs/getting-started -->
@@ -9,6 +10,7 @@
         <item name="android:windowBackground">@color/dark_gray</item>
         <!-- attr colors -->
         <item name="colorBright">@color/tv_white</item>
+        <item name="colorDone">@color/green</item>
         <item name="colorHost">@color/green</item>
         <item name="colorMainMenu">@color/dark_gray</item>
         <!-- Primary brand color -->
@@ -41,6 +43,7 @@
         <item name="android:windowBackground">@color/tv_white</item>
         <!-- attr colors -->
         <item name="colorBright">@color/dark_brown</item>
+        <item name="colorDone">@color/green</item>
         <item name="colorHost">@color/orange_dark</item>
         <item name="colorMainMenu">@color/light_gray</item>
         <!-- colors -->
@@ -91,6 +94,7 @@
         <item name="android:windowBackground">@drawable/rc_background_dark</item>
         <!-- attr colors -->
         <item name="colorBright">@color/tv_white</item>
+        <item name="colorDone">@color/green</item>
         <item name="colorHost">@color/green</item>
         <!-- colors -->
         <item name="colorPrimary">@color/orange</item>
@@ -112,6 +116,7 @@
         <item name="android:windowBackground">@drawable/rc_background_light</item>
         <!-- attr colors -->
         <item name="colorBright">@color/dark_brown</item>
+        <item name="colorDone">@color/green</item>
         <item name="colorHost">@color/orange_dark</item>
         <!-- colors -->
         <item name="colorPrimary">@color/dark_brown</item>

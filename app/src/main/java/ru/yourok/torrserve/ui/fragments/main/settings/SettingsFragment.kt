@@ -9,9 +9,11 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.text.InputType
 import android.util.Log
 import android.view.View
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.fragment.app.FragmentActivity
@@ -41,6 +43,7 @@ import ru.yourok.torrserve.app.App
 import ru.yourok.torrserve.atv.Utils
 import ru.yourok.torrserve.ext.commitFragment
 import ru.yourok.torrserve.ext.getLastFragment
+import ru.yourok.torrserve.server.api.NetDiag
 import ru.yourok.torrserve.server.local.ServerFile
 import ru.yourok.torrserve.server.local.TorrService
 import ru.yourok.torrserve.settings.Settings
@@ -138,6 +141,34 @@ class SettingsFragment : PreferenceFragmentCompat() {
             Settings.setChooserAction(0)
             App.toast(R.string.reset_def)
             true
+        }
+
+        findPreference<EditTextPreference>("qbit_url")?.setOnBindEditTextListener {
+            it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+        }
+
+        findPreference<EditTextPreference>("torrmedia_url")?.setOnBindEditTextListener {
+            it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+        }
+
+        findPreference<Preference>("qbit_test")?.setOnPreferenceClickListener {
+            val ctx = requireActivity()
+            lifecycleScope.launch(Dispatchers.IO) {
+                val report = NetDiag.run()
+                Log.i("QbitFork", "netdiag:\n$report")
+                withContext(Dispatchers.Main) {
+                    AlertDialog.Builder(ctx)
+                        .setTitle(R.string.qbit_test_title)
+                        .setMessage(report)
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show()
+                }
+            }
+            true
+        }
+
+        findPreference<EditTextPreference>("qbit_pass")?.setOnBindEditTextListener {
+            it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
         }
 
         findPreference<ListPreference>(getString(R.string.player_pref_key))?.apply {

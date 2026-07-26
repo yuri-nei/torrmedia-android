@@ -19,8 +19,13 @@ import kotlinx.coroutines.launch
 import ru.yourok.torrserve.BuildConfig
 import ru.yourok.torrserve.R
 import ru.yourok.torrserve.app.App
+import androidx.appcompat.app.AlertDialog
 import ru.yourok.torrserve.server.api.Api
+import ru.yourok.torrserve.server.api.TorrmediaApi
+import ru.yourok.torrserve.server.api.QbitApi
+import ru.yourok.torrserve.server.api.matchesShelfItem
 import ru.yourok.torrserve.server.models.torrent.Torrent
+import ru.yourok.torrserve.settings.Settings
 import ru.yourok.torrserve.utils.TorrentHelper
 import ru.yourok.torrserve.utils.TorrentHelper.getTorrentMagnet
 import kotlin.concurrent.thread
@@ -50,7 +55,7 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
         when (item.itemId) {
             R.id.itemOpenWith -> {
                 val magnetUris = mutableListOf<Uri>()
-                selected.forEach {
+                selected.filter { it.src != "media" }.forEach {
                     val magnet = getTorrentMagnet(it)
                     if (magnet.isNotEmpty()) {
                         magnetUris.add(Uri.parse(magnet))
@@ -93,7 +98,7 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
             }
 
             R.id.itemShareMagnet -> {
-                val msg = selected.joinToString("\n\n") { getTorrentMagnet(it) }
+                val msg = selected.filter { it.src != "media" }.joinToString("\n\n") { getTorrentMagnet(it) }
                 if (msg.isNotEmpty()) {
                     val share = Intent().apply {
                         action = Intent.ACTION_SEND
@@ -108,7 +113,7 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
             }
 
             R.id.itemCopyMagnet -> {
-                val msg = selected.joinToString("\n\n") { getTorrentMagnet(it) }
+                val msg = selected.filter { it.src != "media" }.joinToString("\n\n") { getTorrentMagnet(it) }
                 if (msg.isNotEmpty()) {
                     val clipboard = App.context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     val clip = ClipData.newPlainText("magnets", msg)
@@ -118,14 +123,57 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
             }
 
             R.id.itemRemoveTorrent -> {
+                val remote = selected.filter { it.src != null }
+                val local = selected.filter { it.src == null }
                 thread {
-                    selected.forEach {
+                    local.forEach {
                         try {
                             Api.remTorrent(it.hash)
                         } catch (e: Exception) {
                             e.printStackTrace()
                         }
                     }
+                }
+                if (remote.isNotEmpty()) {
+                    AlertDialog.Builder(listView.context)
+                        .setTitle(R.string.qbit_delete_torrent)
+                        .setMessage(R.string.qbit_delete_torrent_confirm)
+                        .setPositiveButton(android.R.string.ok) { _, _ ->
+                            thread {
+                                remote.forEach { torr ->
+                                    try {
+                                        if (torr.src == "media") {
+                                            // hash carries the torrmedia item path; a live torrent must go
+                                            // as a whole, else qBit re-downloads the files we just deleted
+                                            // If qBit is configured but temporarily unavailable, fail closed:
+                                            // treating an API error as "torrent is gone" would only remove shelf
+                                            // files and then incorrectly purge the torrent's viewed history.
+                                            val live = if (Settings.getQbitEnabled()) {
+                                                QbitApi.listTorrents()
+                                                    .find { matchesShelfItem(it.contentPath, torr.hash) }
+                                            } else {
+                                                null
+                                            }
+                                            if (live != null) {
+                                                QbitApi.deleteTorrent(live.hash, true)
+                                            } else {
+                                                TorrmediaApi.list().find { it.path == torr.hash }
+                                                    ?.files?.forEach { TorrmediaApi.deleteFile(it.path) }
+                                            }
+                                            TorrmediaApi.remViewedItem(torr.hash)
+                                        } else {
+                                            QbitApi.deleteTorrent(torr.hash, true)
+                                            if (torr.mediaItemPath.isNotEmpty())
+                                                TorrmediaApi.remViewedItem(torr.mediaItemPath)
+                                        }
+                                    } catch (e: Exception) {
+                                        App.toast(App.context.getString(R.string.qbit_send_error) + ": " + (e.message ?: ""), true)
+                                    }
+                                }
+                            }
+                        }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
                 }
             }
 
@@ -142,7 +190,7 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
             }
 
             R.id.itemShowInfo -> {
-                selected.forEach {
+                selected.filter { it.src == null }.forEach {
                     CoroutineScope(Dispatchers.IO).launch {
                         val torrent: Torrent = TorrentHelper.waitFiles(it.hash) ?: let {
                             return@launch

@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name" translatable="false">TorrServe MatriX</string>
+    <string name="app_name" translatable="false">torrmedia</string>
 
     <string name="add">Add</string>
     <string name="rutor" translatable="false">RuTor</string>
@@ -317,4 +317,76 @@
     <string name="torrserver_log_cleared">TorrServer journal cleared</string>
     <string name="torrserver_log_trimmed">Log content trimmed (showing last %s)</string>
 
+    <!-- torrmedia -->
+    <string name="qbit_download">Download (qBittorrent)</string>
+    <string name="qbit_select_category">qBittorrent category</string>
+    <string name="qbit_sent">Sent to qBittorrent</string>
+    <string name="qbit_send_error">qBittorrent error</string>
+    <string name="qbit_pref_title" translatable="false">qBittorrent</string>
+    <string name="qbit_enabled_title">Send to qBittorrent</string>
+    <string name="qbit_enabled_summary">Show \u201cDownload (qBittorrent)\u201d action for new torrents</string>
+    <string name="qbit_url_title">qBittorrent address</string>
+    <string name="qbit_url_summary">WebUI URL, e.g. http://host:8080</string>
+    <string name="qbit_user_title">qBittorrent username</string>
+    <string name="qbit_pass_title">qBittorrent password</string>
+    <string name="qbit_category_title">Default category</string>
+    <string name="qbit_category_summary">Used when the category list is unavailable</string>
+    <string name="torrmedia_url_title">torrmedia address</string>
+    <string name="torrmedia_url_summary">Downloads service URL, e.g. http://host:8091</string>
+    <string name="qbit_test_title">Check connection</string>
+    <string name="qbit_test_summary">TCP and API self-test for qBittorrent and torrmedia</string>
+    <string name="qbit_delete_torrent">Delete torrent</string>
+    <string name="qbit_delete_torrent_confirm">The torrent and its files on the server will be deleted</string>
+    <string name="qbit_delete_file">Delete episode</string>
+    <string name="qbit_delete_file_confirm">The file will be deleted from the server</string>
+    <string name="qbit_mark_watched">Mark as watched</string>
+    <string name="qbit_remove_watched">Remove watch mark</string>
+    <string name="qbit_deleted">Deleted</string>
+    <string name="torrmedia_not_set">torrmedia URL is not set in settings</string>
+    <string name="qbit_skipped">skipped</string>
+    <string name="qbit_enabling">enabling…</string>
+    <string name="qbit_deleting">queued for deletion…</string>
+    <string name="qbit_cancel_download">Cancel download</string>
+    <string name="qbit_state_checking">checking</string>
+    <string name="qbit_state_moving">moving</string>
+    <string name="qbit_state_paused">paused</string>
+    <string name="qbit_state_error">error</string>
+    <string name="qbit_state_downloading">downloading</string>
+    <string name="qbit_state_ready">ready</string>
+    <string name="qbit_pause">Pause</string>
+    <string name="qbit_stalled_warn">qBittorrent still refuses to fetch the file — see the torrent in its WebUI</string>
+    <string name="qbit_state_stalled">stalled</string>
+    <string name="qbit_resume">Resume</string>
+    <string name="qbit_status_ready_stopped">ready · seeding stopped</string>
+    <string name="qbit_status_ready_seeding">ready · seeding</string>
+    <string name="qbit_status_ready_waiting_peers">ready · waiting for peers</string>
+    <string name="qbit_status_ready_queued">ready · queued for seeding</string>
+    <string name="qbit_status_download_paused">download paused</string>
+    <string name="qbit_status_downloading">downloading</string>
+    <string name="qbit_status_download_waiting_sources">download · waiting for sources</string>
+    <string name="qbit_status_download_queued">download queued</string>
+    <string name="qbit_status_fetching_metadata">fetching metadata</string>
+    <string name="qbit_status_allocating">allocating space</string>
+    <string name="qbit_status_checking">checking</string>
+    <string name="qbit_status_moving">moving</string>
+    <string name="qbit_status_files_missing">files missing</string>
+    <string name="qbit_status_error">error</string>
+    <string name="qbit_status_unknown">unknown state</string>
+    <string name="qbit_action_start_seeding">Start seeding</string>
+    <string name="qbit_action_stop_seeding">Stop seeding</string>
+    <string name="qbit_action_resume_download">Resume download</string>
+    <string name="qbit_action_pause_download">Pause download</string>
+    <string name="qbit_action_pause">Pause</string>
+    <string name="qbit_action_checking">Checking…</string>
+    <string name="qbit_action_moving">Moving…</string>
+    <string name="qbit_action_unavailable">Unavailable</string>
+    <string name="qbit_files_fmt">%1$d of %2$d files</string>
+    <string name="qbit_left_fmt">%1$s left</string>
+    <string name="qbit_speed">Speed</string>
+    <string name="qbit_eta">ETA</string>
+    <string name="qbit_added">Added</string>
+    <string name="qbit_shelf_only">on the shelf, no torrent in qBittorrent</string>
+    <string name="qbit_resume_started">Download enabled</string>
+    <string name="qbit_resume_failed">qBittorrent kept the file skipped — it is busy checking, try again later</string>
+    <string name="qbit_cancel_download_confirm">Cancel the download and delete the file?</string>
 </resources>

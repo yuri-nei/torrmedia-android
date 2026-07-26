@@ -183,6 +183,10 @@ class PlayActivity : AppCompatActivity() {
                         3 -> {
                             addAndExit()
                         }
+
+                        4 -> {
+                            qbitAndExit()
+                        }
                     }
                 }
             }

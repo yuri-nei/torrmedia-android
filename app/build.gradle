@@ -9,14 +9,13 @@ plugins {
 android {
     compileSdk 37
     defaultConfig {
-        applicationId "ru.yourok.torrserve"
+        applicationId "io.github.yurinei.torrmedia"
         minSdkVersion 16
         //noinspection ExpiredTargetSdkVersion
         targetSdkVersion 28
         multiDexEnabled true
         versionCode 143
-        versionName "MatriX.143.Client"
-        // setProperty("archivesBaseName", "TorrServe_" + versionName)
+        versionName "MatriX.143"
         // Use SupportLibrary for vectors
         vectorDrawables.useSupportLibrary = true
     }
@@ -37,6 +36,10 @@ android {
     buildFeatures {
         buildConfig true
     }
+}
+
+base {
+    archivesName = "torrmedia-android-" + android.defaultConfig.versionName
 }
 
 dependencies {

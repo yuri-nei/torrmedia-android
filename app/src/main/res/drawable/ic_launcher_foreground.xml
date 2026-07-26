@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Three items in a list: watched (with a play mark), half downloaded, just started.
+     Scaled to 0.72 so the glyph stays inside the 66dp safe zone of every launcher mask. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.72"
+        android:scaleY="0.72">
+        <path
+            android:fillColor="#81C995"
+            android:pathData="M30,25H78A9,9 0,0 1,78 43H30A9,9 0,0 1,30 25Z" />
+        <path
+            android:fillColor="#202124"
+            android:pathData="M30,28.5L41,34L30,39.5Z" />
+        <path
+            android:fillColor="#3C4043"
+            android:pathData="M27.5,50H80.5A6.5,6.5 0,0 1,80.5 63H27.5A6.5,6.5 0,0 1,27.5 50Z" />
+        <path
+            android:fillColor="#8AB4F8"
+            android:pathData="M27.5,50H56.5A6.5,6.5 0,0 1,56.5 63H27.5A6.5,6.5 0,0 1,27.5 50Z" />
+        <path
+            android:fillColor="#3C4043"
+            android:pathData="M27.5,70H80.5A6.5,6.5 0,0 1,80.5 83H27.5A6.5,6.5 0,0 1,27.5 70Z" />
+        <path
+            android:fillColor="#8AB4F8"
+            android:pathData="M27.5,70H32.5A6.5,6.5 0,0 1,32.5 83H27.5A6.5,6.5 0,0 1,27.5 70Z" />
+    </group>
+</vector>

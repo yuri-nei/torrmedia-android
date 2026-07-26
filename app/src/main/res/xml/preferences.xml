@@ -78,6 +78,52 @@
         app:summary="@string/remove_action_summary"
         app:title="@string/remove_action_title" />
 
+    <PreferenceCategory
+        style="@style/HeadPreferenceCategory"
+        android:key="qbit"
+        android:title="@string/qbit_pref_title" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:summary="@string/qbit_enabled_summary"
+        app:key="qbit_enabled"
+        app:title="@string/qbit_enabled_title" />
+
+    <EditTextPreference
+        android:dependency="qbit_enabled"
+        app:key="qbit_url"
+        app:summary="@string/qbit_url_summary"
+        app:title="@string/qbit_url_title" />
+
+    <EditTextPreference
+        android:dependency="qbit_enabled"
+        app:key="qbit_user"
+        app:title="@string/qbit_user_title"
+        app:useSimpleSummaryProvider="true" />
+
+    <EditTextPreference
+        android:dependency="qbit_enabled"
+        app:key="qbit_pass"
+        app:title="@string/qbit_pass_title" />
+
+    <EditTextPreference
+        android:defaultValue="Shows"
+        android:dependency="qbit_enabled"
+        app:key="qbit_category"
+        app:summary="@string/qbit_category_summary"
+        app:title="@string/qbit_category_title" />
+
+    <EditTextPreference
+        android:dependency="qbit_enabled"
+        app:key="torrmedia_url"
+        app:summary="@string/torrmedia_url_summary"
+        app:title="@string/torrmedia_url_title" />
+
+    <Preference
+        app:key="qbit_test"
+        app:summary="@string/qbit_test_summary"
+        app:title="@string/qbit_test_title" />
+
     <SwitchPreferenceCompat
         android:defaultValue="true"
         android:summaryOff="@string/show_banner_sum_off"

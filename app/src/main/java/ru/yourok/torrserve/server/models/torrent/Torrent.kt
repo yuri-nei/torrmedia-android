@@ -35,7 +35,16 @@ data class Torrent(
     var duration_seconds: Double?,
     var bit_rate: String?,
 
-    var file_stats: List<FileStat>?
+    var file_stats: List<FileStat>?,
+
+    // torrmedia: "qbit" marks items that live in remote qBittorrent (null = TorrServer)
+    var src: String? = null,
+
+    // torrmedia watch summary (ignored only for TorrServer rows)
+    var watchedFiles: Int = 0,
+    var startedFiles: Int = 0,
+    var mediaFiles: Int = 0,
+    var mediaItemPath: String = "",
 )
 
 data class FileStat(

@@ -55,7 +55,7 @@ class ChannelProvider(private val iName: String, private val dName: String) {
             builder.build().toContentValues()
         )
         channelId = channelUri?.let { ContentUris.parseId(it) } ?: 0
-        val bitmap = BitmapFactory.decodeResource(App.context.resources, R.drawable.ts_round)
+        val bitmap = BitmapFactory.decodeResource(App.context.resources, R.drawable.ic_channel_logo)
         ChannelLogoUtils.storeChannelLogo(App.context, channelId, bitmap)
         TvContractCompat.requestChannelBrowsable(App.context, channelId)
         return channelId

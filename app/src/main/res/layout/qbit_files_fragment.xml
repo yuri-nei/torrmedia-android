@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/tvQbitTorrTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:fontFamily="sans-serif-condensed"
+        android:maxLines="2"
+        android:paddingStart="8dp"
+        android:paddingLeft="8dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="8dp"
+        android:paddingRight="8dp"
+        android:textAppearance="@style/TextAppearance.AppCompat.Medium"
+        android:textColor="?attr/colorBright"
+        tools:text="Torrent Name" />
+
+    <com.google.android.material.progressindicator.LinearProgressIndicator
+        android:id="@+id/pbQbitProgress"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginLeft="8dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginEnd="8dp"
+        android:layout_marginRight="8dp"
+        android:indeterminate="false"
+        android:visibility="gone"
+        app:trackCornerRadius="2dp"
+        app:trackThickness="4dp"
+        tools:visibility="visible" />
+
+    <TextView
+        android:id="@+id/tvQbitSummary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="8dp"
+        android:paddingLeft="8dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="8dp"
+        android:paddingRight="8dp"
+        android:textAppearance="@style/TextAppearance.AppCompat.Small"
+        tools:text="DOWNLOADING · 47% · 29.1 / 61.8 GB · 7 of 10 files" />
+
+    <com.google.android.flexbox.FlexboxLayout
+        android:id="@+id/fbQbitInfo"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="8dp"
+        android:paddingLeft="8dp"
+        android:paddingTop="2dp"
+        android:paddingEnd="8dp"
+        android:paddingRight="8dp"
+        android:paddingBottom="4dp"
+        app:alignContent="flex_start"
+        app:alignItems="flex_start"
+        app:flexWrap="wrap"
+        app:showDivider="none">
+
+        <TextView
+            android:id="@+id/tvQbitSpeed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="12dp"
+            android:layout_marginRight="12dp"
+            android:textAppearance="@style/TextAppearance.AppCompat.Small"
+            tools:text="Speed" />
+
+        <TextView
+            android:id="@+id/tvQbitSeeds"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="12dp"
+            android:layout_marginRight="12dp"
+            android:textAppearance="@style/TextAppearance.AppCompat.Small"
+            tools:text="Seeds" />
+
+        <TextView
+            android:id="@+id/tvQbitPeers"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="12dp"
+            android:layout_marginRight="12dp"
+            android:textAppearance="@style/TextAppearance.AppCompat.Small"
+            tools:text="Peers" />
+
+        <TextView
+            android:id="@+id/tvQbitEta"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="12dp"
+            android:layout_marginRight="12dp"
+            android:textAppearance="@style/TextAppearance.AppCompat.Small"
+            tools:text="ETA" />
+
+        <TextView
+            android:id="@+id/tvQbitCategory"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="12dp"
+            android:layout_marginRight="12dp"
+            android:textAppearance="@style/TextAppearance.AppCompat.Small"
+            tools:text="Category" />
+
+        <TextView
+            android:id="@+id/tvQbitAdded"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="12dp"
+            android:layout_marginRight="12dp"
+            android:textAppearance="@style/TextAppearance.AppCompat.Small"
+            tools:text="Added" />
+    </com.google.android.flexbox.FlexboxLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:orientation="horizontal">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnQbitPause"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="52dp"
+            android:layout_marginStart="6dp"
+            android:layout_marginLeft="6dp"
+            android:layout_marginEnd="4dp"
+            android:layout_marginRight="4dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:maxLines="1"
+            android:singleLine="true"
+            android:textAlignment="center"
+            android:text="@string/qbit_pause"
+            app:icon="@drawable/ic_qbit_pause"
+            app:iconGravity="textStart"
+            app:iconPadding="6dp"
+            app:iconSize="22dp"
+            app:iconTint="?attr/colorAccent" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnQbitDeleteTorrent"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:layout_marginStart="4dp"
+            android:layout_marginLeft="4dp"
+            android:layout_marginEnd="6dp"
+            android:layout_marginRight="6dp"
+            android:contentDescription="@string/qbit_delete_torrent"
+            android:gravity="center"
+            android:minWidth="0dp"
+            android:padding="0dp"
+            android:text=""
+            app:icon="@drawable/ic_qbit_delete"
+            app:iconGravity="textStart"
+            app:iconPadding="0dp"
+            app:iconSize="24dp"
+            app:iconTint="?attr/colorAccent" />
+    </LinearLayout>
+
+    <ListView
+        android:id="@+id/lvQbitFiles"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fadingEdge="vertical"
+        android:fadingEdgeLength="50dp"
+        android:listSelector="@drawable/action_selector"
+        android:requiresFadingEdge="vertical" />
+
+</LinearLayout>
