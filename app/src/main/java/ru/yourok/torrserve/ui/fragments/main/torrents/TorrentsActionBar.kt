@@ -30,6 +30,8 @@ import ru.yourok.torrserve.utils.TorrentHelper
 import ru.yourok.torrserve.utils.TorrentHelper.getTorrentMagnet
 import kotlin.concurrent.thread
 
+private const val OPERATION_POLL_TIMEOUT_MS = 30_000L
+private const val OPERATION_POLL_DELAY_MS = 250L
 
 class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeListener {
 
@@ -38,6 +40,7 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
             0 -> actionMode.subtitle = null
             else -> actionMode.title = selectedCount.toString()
         }
+        actionMode.invalidate()
     }
 
     override fun onCreateActionMode(actionMode: ActionMode, menu: Menu?): Boolean {
@@ -47,7 +50,15 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
     }
 
     override fun onPrepareActionMode(actionMode: ActionMode?, menu: Menu?): Boolean {
-        return false
+        val clearViewed = menu?.findItem(R.id.itemRemoveViewed) ?: return false
+        val selected = selectedItems
+        val visible = selected.isNotEmpty() && selected.all {
+            it.src != "torrmedia" || ItemAction.CLEAR_VIEWED in it.torrmediaActions
+        }
+        if (clearViewed.isVisible == visible)
+            return false
+        clearViewed.isVisible = visible
+        return true
     }
 
     override fun onActionItemClicked(actionMode: ActionMode, item: MenuItem): Boolean {
@@ -148,12 +159,20 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
                 thread {
                     selected.forEach {
                         try {
-                            if (it.src == "torrmedia")
+                            if (it.src == "torrmedia") {
+                                if (ItemAction.CLEAR_VIEWED !in it.torrmediaActions) {
+                                    App.toast(App.context.getString(R.string.torrmedia_action_unavailable), true)
+                                    return@forEach
+                                }
                                 TorrmediaApi.clearViewedItem(it.hash)
-                            else
+                            } else {
                                 Api.remViewed(it.hash)
+                            }
                         } catch (e: Exception) {
-                            e.printStackTrace()
+                            App.toast(
+                                App.context.getString(R.string.qbit_send_error) +
+                                    ": " + (e.message ?: ""), true,
+                            )
                         }
                     }
                 }
@@ -204,18 +223,30 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
 
     private fun reportOperationOutcome(id: String) {
         thread {
-            val op = runCatching { TorrmediaApi.operation(id) }.getOrNull() ?: return@thread
-            when (op.state) {
-                OperationState.FAILED -> App.toast(
-                    App.context.getString(R.string.torrmedia_op_failed) +
-                        (op.error?.let { ": $it" } ?: ""), true
-                )
+            val deadline = System.nanoTime() + OPERATION_POLL_TIMEOUT_MS * 1_000_000
+            while (System.nanoTime() < deadline) {
+                val op = runCatching { TorrmediaApi.operation(id) }.getOrNull()
+                when (op?.state) {
+                    OperationState.FAILED -> {
+                        App.toast(
+                            App.context.getString(R.string.torrmedia_op_failed) +
+                                (op.error?.let { ": $it" } ?: ""), true,
+                        )
+                        return@thread
+                    }
 
-                OperationState.DONE -> for (warning in op.warnings)
-                    App.toast(warning, true)
+                    OperationState.DONE -> {
+                        App.toast(R.string.torrmedia_op_done)
+                        for (warning in op.warnings)
+                            App.toast(warning, true)
+                        return@thread
+                    }
 
-                else -> {}
+                    OperationState.CANCELLED -> return@thread
+                    else -> Thread.sleep(OPERATION_POLL_DELAY_MS)
+                }
             }
+            App.toast(App.context.getString(R.string.torrmedia_op_still_running), true)
         }
     }
 

@@ -360,6 +360,7 @@
     <string name="torrmedia_phase_restarting">restarting</string>
     <string name="torrmedia_op_done">Done</string>
     <string name="torrmedia_op_failed">Operation failed</string>
+    <string name="torrmedia_op_still_running">Operation is still running</string>
     <string name="torrmedia_url_summary">Service URL, e.g. http://host:8091 \u2014 the only address the app needs</string>
     <string name="torrmedia_token_title">torrmedia token</string>
     <string name="torrmedia_token_summary">Optional, sent as Authorization: Bearer</string>

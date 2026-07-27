@@ -46,7 +46,8 @@ class TorrmediaStore<T> private constructor(
     private val attempt = AtomicInteger(0)
 
     private val generation = AtomicInteger(0)
-    private val stream = AtomicReference<Pair<Int, TorrmediaHttp.Stream>?>(null)
+    private class OwnedStream(val generation: Int, val value: TorrmediaHttp.Stream)
+    private val stream = AtomicReference<OwnedStream?>(null)
     private var job: Job? = null
 
     fun start(scope: CoroutineScope) {
@@ -64,13 +65,13 @@ class TorrmediaStore<T> private constructor(
         _connected.value = false
     }
 
-    private fun closeStream(only: Int?) {
+    private fun closeStream(only: OwnedStream?) {
         while (true) {
             val current = stream.get() ?: return
-            if (only != null && current.first != only)
+            if (only != null && current !== only)
                 return
             if (stream.compareAndSet(current, null)) {
-                runCatching { current.second.close() }
+                runCatching { current.value.close() }
                 return
             }
         }
@@ -103,9 +104,11 @@ class TorrmediaStore<T> private constructor(
 
     private suspend fun consume() = suspendCancellableCoroutine<Unit> { cont ->
         val mine = generation.get()
-        cont.invokeOnCancellation { closeStream(mine) }
+        val mineOwner = AtomicReference<OwnedStream?>(null)
+        cont.invokeOnCancellation { mineOwner.get()?.let { closeStream(it) } }
         val worker = Thread({
             var opened: TorrmediaHttp.Stream? = null
+            var owner: OwnedStream? = null
             try {
                 opened = TorrmediaApi.openStream(path())
                 if (!cont.isActive || generation.get() != mine) {
@@ -114,16 +117,33 @@ class TorrmediaStore<T> private constructor(
                         cont.resume(Unit)
                     return@Thread
                 }
-                stream.set(mine to opened)
-                opened.read { event -> onEvent(event) }
+                val candidate = OwnedStream(mine, opened)
+                if (!stream.compareAndSet(null, candidate)) {
+                    opened.close()
+                    if (cont.isActive)
+                        cont.resume(Unit)
+                    return@Thread
+                }
+                owner = candidate
+                mineOwner.set(candidate)
+                if (!cont.isActive || generation.get() != mine) {
+                    closeStream(candidate)
+                    if (cont.isActive)
+                        cont.resume(Unit)
+                    return@Thread
+                }
+                opened.read { event ->
+                    if (cont.isActive && generation.get() == mine)
+                        onEvent(event)
+                }
                 if (cont.isActive)
                     cont.resume(Unit)
             } catch (e: Throwable) {
                 if (cont.isActive)
                     cont.resumeWithException(e)
             } finally {
-                opened?.let { runCatching { it.close() } }
-                closeStream(mine)
+                owner?.let { closeStream(it) }
+                    ?: opened?.let { runCatching { it.close() } }
             }
         }, "torrmedia-sse")
         worker.isDaemon = true

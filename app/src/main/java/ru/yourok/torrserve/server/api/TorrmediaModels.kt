@@ -16,7 +16,7 @@ enum class WatchState { NONE, STARTED, WATCHED }
 
 enum class OperationState { QUEUED, RUNNING, DONE, FAILED, CANCELLED, UNKNOWN }
 
-enum class ItemAction { START, STOP, RECHECK, REMOVE, REMOVE_WITH_DATA }
+enum class ItemAction { START, STOP, RECHECK, REMOVE, REMOVE_WITH_DATA, CLEAR_VIEWED }
 
 enum class FileAction { PLAY, DELETE, ENABLE, SET_VIEWED, CLEAR_VIEWED }
 

@@ -37,6 +37,7 @@ fun itemActionLabel(action: ItemAction): String = App.context.getString(
         ItemAction.RECHECK -> R.string.torrmedia_action_recheck
         ItemAction.REMOVE -> R.string.torrmedia_action_remove
         ItemAction.REMOVE_WITH_DATA -> R.string.torrmedia_action_remove_with_data
+        ItemAction.CLEAR_VIEWED -> R.string.torrmedia_action_clear_viewed
     }
 )
 

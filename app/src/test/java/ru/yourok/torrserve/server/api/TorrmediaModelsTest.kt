@@ -14,7 +14,7 @@ class TorrmediaModelsTest {
            "progress":1.0,"size":52430118982,"downloaded":52430118982,
            "files_total":7,"files_watched":3,"files_ready":5,"category":"Shows","added_at":1785000000,
            "transfer":{"down":0,"up":0,"eta":null,"ratio":0.0055,"seeds":1,"peers":0},
-           "actions":["stop","recheck","remove","remove_with_data"]}
+           "actions":["stop","recheck","remove","remove_with_data","clear_viewed"]}
         ],"degraded":null}
     """.trimIndent()
 
@@ -36,7 +36,10 @@ class TorrmediaModelsTest {
         assertEquals(1, item.transfer?.seeds)
         assertNull(item.transfer?.eta)
         assertEquals(
-            setOf(ItemAction.STOP, ItemAction.RECHECK, ItemAction.REMOVE, ItemAction.REMOVE_WITH_DATA),
+            setOf(
+                ItemAction.STOP, ItemAction.RECHECK, ItemAction.REMOVE,
+                ItemAction.REMOVE_WITH_DATA, ItemAction.CLEAR_VIEWED,
+            ),
             item.actions
         )
         assertNull(item.files)

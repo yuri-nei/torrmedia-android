@@ -299,6 +299,7 @@
     <string name="torrmedia_phase_restarting">запускаю обратно</string>
     <string name="torrmedia_op_done">Готово</string>
     <string name="torrmedia_op_failed">Операция не удалась</string>
+    <string name="torrmedia_op_still_running">Операция всё ещё выполняется</string>
     <string name="torrmedia_url_summary">Адрес сервиса, напр. http://host:8091 — единственный, который нужен приложению</string>
     <string name="torrmedia_token_title">Токен torrmedia</string>
     <string name="torrmedia_token_summary">Необязательный, уходит в заголовке Authorization: Bearer</string>

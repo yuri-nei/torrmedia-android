@@ -115,7 +115,11 @@ class TorrentsAdapter(private val activity: FragmentActivity) : BaseAdapter() {
                 val total = list[position].torrent_size
                 val pct = if (total > 0) (list[position].loaded_size * 100 / total).toInt() else 0
                 val mark = if (pct >= 100) "\u2713" else "$pct%"
-                val badge = "${itemStatusLabel(list[position].torrmediaStatus).uppercase(Locale.getDefault())} $mark"
+                val status = "${itemStatusLabel(list[position].torrmediaStatus).uppercase(Locale.getDefault())} $mark"
+                val badge = if (isStale(list[position]))
+                    "${vi.context.getString(R.string.torrmedia_disconnected).uppercase(Locale.getDefault())} · $status"
+                else
+                    status
                 if (list[position].torrmediaFilesTotal > 0)
                     "$badge  \u2713 ${list[position].torrmediaFilesWatched}/${list[position].torrmediaFilesTotal}"
                 else
