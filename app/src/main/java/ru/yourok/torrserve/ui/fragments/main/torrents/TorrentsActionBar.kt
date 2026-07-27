@@ -242,7 +242,6 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
                         return@thread
                     }
 
-                    OperationState.CANCELLED -> return@thread
                     else -> Thread.sleep(OPERATION_POLL_DELAY_MS)
                 }
             }

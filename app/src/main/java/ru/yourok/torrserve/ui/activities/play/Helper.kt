@@ -145,9 +145,7 @@ private suspend fun awaitOperation(op: Operation): Operation {
         return op
     var current = op
     repeat(20) {
-        if (current.state == OperationState.DONE || current.state == OperationState.FAILED ||
-            current.state == OperationState.CANCELLED
-        )
+        if (current.state == OperationState.DONE || current.state == OperationState.FAILED)
             return current
         delay(250)
         current = runCatching { TorrmediaApi.operation(op.id) }.getOrNull() ?: return current

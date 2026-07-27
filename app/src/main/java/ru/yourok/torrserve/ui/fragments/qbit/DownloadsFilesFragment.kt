@@ -437,12 +437,6 @@ class DownloadsFilesFragment : TSFragment() {
                     parentFragmentManager.popBackStack()
             }
 
-            OperationState.CANCELLED -> {
-                pending.remove(op.id)
-                phase = ""
-                render(store.state.value)
-            }
-
             OperationState.FAILED -> {
                 pending.remove(op.id)
                 phase = ""

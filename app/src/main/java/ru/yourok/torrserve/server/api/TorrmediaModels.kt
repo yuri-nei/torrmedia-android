@@ -14,7 +14,7 @@ enum class FileStatus { READY, PARTIAL, SKIPPED, MISSING, UNKNOWN }
 /// watch: null | "started" | "watched"
 enum class WatchState { NONE, STARTED, WATCHED }
 
-enum class OperationState { QUEUED, RUNNING, DONE, FAILED, CANCELLED, UNKNOWN }
+enum class OperationState { QUEUED, RUNNING, DONE, FAILED, UNKNOWN }
 
 enum class ItemAction { START, STOP, RECHECK, REMOVE, REMOVE_WITH_DATA, CLEAR_VIEWED }
 
@@ -28,16 +28,13 @@ enum class TorrmediaErrorCode {
 
 class TorrmediaException(
     message: String,
-    val httpCode: Int = 0,
     val code: TorrmediaErrorCode = TorrmediaErrorCode.UNKNOWN,
-    val rawCode: String = "",
 ) : Exception(message)
 
 data class Transfer(
     val down: Long = 0,
     val up: Long = 0,
     val eta: Long? = null,
-    val ratio: Double = 0.0,
     val seeds: Int = 0,
     val peers: Int = 0,
 )
@@ -76,16 +73,10 @@ data class ItemsSnapshot(val items: List<Item>, val degraded: String?)
 
 data class Operation(
     val id: String,
-    val kind: String,
-    val item: String,
-    val file: String?,
     val state: OperationState,
     val phase: String?,
-    val startedAt: Long,
-    val finishedAt: Long?,
     val error: String?,
     val warnings: List<String>,
-    val result: String?,
 )
 
 data class Health(val version: String, val contract: Int, val checks: Map<String, String>)
@@ -136,7 +127,6 @@ fun transferOf(o: JsonObject): Transfer = Transfer(
     down = o.long("down"),
     up = o.long("up"),
     eta = o.longOrNull("eta"),
-    ratio = o.dbl("ratio"),
     seeds = o.int("seeds"),
     peers = o.int("peers"),
 )
@@ -173,19 +163,13 @@ fun itemOf(o: JsonObject): Item = Item(
 
 fun operationOf(o: JsonObject): Operation = Operation(
     id = o.str("id") ?: "",
-    kind = o.str("kind") ?: "",
-    item = o.str("item") ?: "",
-    file = o.str("file"),
     state = wireEnum(o.str("state"), OperationState.values(), OperationState.UNKNOWN),
     phase = o.str("phase"),
-    startedAt = o.long("started_at"),
-    finishedAt = o.longOrNull("finished_at"),
     error = o.str("error"),
     warnings = o.arr("warnings")
         ?.mapNotNull { runCatching { it.asString }.getOrNull() }
         ?.filter { it.isNotBlank() }
         ?: emptyList(),
-    result = o.field("result")?.toString(),
 )
 
 fun parseItems(body: String): ItemsSnapshot {
@@ -228,7 +212,7 @@ fun parseError(httpCode: Int, body: String): TorrmediaException {
     val code = wireEnum(raw, TorrmediaErrorCode.values(), TorrmediaErrorCode.UNKNOWN)
     return TorrmediaException(
         if (text.isEmpty()) "HTTP $httpCode" else "HTTP $httpCode: $text",
-        httpCode, code, raw,
+        code,
     )
 }
 

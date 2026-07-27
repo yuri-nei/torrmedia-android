@@ -46,7 +46,7 @@ class TorrmediaStore<T> private constructor(
     private val attempt = AtomicInteger(0)
 
     private val generation = AtomicInteger(0)
-    private class OwnedStream(val generation: Int, val value: TorrmediaHttp.Stream)
+    private class OwnedStream(val value: TorrmediaHttp.Stream)
     private val stream = AtomicReference<OwnedStream?>(null)
     private var job: Job? = null
 
@@ -117,7 +117,7 @@ class TorrmediaStore<T> private constructor(
                         cont.resume(Unit)
                     return@Thread
                 }
-                val candidate = OwnedStream(mine, opened)
+                val candidate = OwnedStream(opened)
                 if (!stream.compareAndSet(null, candidate)) {
                     opened.close()
                     if (cont.isActive)

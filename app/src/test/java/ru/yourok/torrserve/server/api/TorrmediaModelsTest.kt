@@ -117,8 +117,6 @@ class TorrmediaModelsTest {
     fun `error body becomes a typed exception`() {
         val e = parseError(409, """{"error":"file is being streamed right now","code":"streaming"}""")
         assertEquals(TorrmediaErrorCode.STREAMING, e.code)
-        assertEquals("streaming", e.rawCode)
-        assertEquals(409, e.httpCode)
         assertTrue(e.message?.contains("file is being streamed right now") == true)
     }
 
@@ -143,7 +141,6 @@ class TorrmediaModelsTest {
     fun `unknown or absent code stays unknown but keeps the text`() {
         val unknown = parseError(500, """{"error":"boom","code":"kaboom"}""")
         assertEquals(TorrmediaErrorCode.UNKNOWN, unknown.code)
-        assertEquals("kaboom", unknown.rawCode)
         val html = parseError(502, "<html>Bad Gateway</html>")
         assertEquals(TorrmediaErrorCode.UNKNOWN, html.code)
         assertTrue(html.message?.contains("502") == true)
@@ -162,7 +159,6 @@ class TorrmediaModelsTest {
         assertEquals("op_4f2b91", op.id)
         assertEquals(OperationState.RUNNING, op.state)
         assertEquals("trimming", op.phase)
-        assertNull(op.finishedAt)
         assertNull(op.error)
         assertTrue(op.warnings.isEmpty())
     }
@@ -277,12 +273,4 @@ class TorrmediaModelsTest {
         assertEquals(setOf(FileAction.PLAY), file.actions)
     }
 
-    @Test
-    fun `cancelled operation state is understood`() {
-        val op = parseOperation("""{"id":"op_1","kind":"file.delete","item":"i","file":null,
-                                    "state":"cancelled","phase":null,"started_at":0,
-                                    "finished_at":1,"error":null,"warnings":[],"result":null}""")
-        assertEquals(OperationState.CANCELLED, op.state)
-        assertEquals(null, op.error)
-    }
 }
