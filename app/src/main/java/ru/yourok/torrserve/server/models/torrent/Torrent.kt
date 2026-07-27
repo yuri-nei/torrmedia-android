@@ -1,5 +1,8 @@
 package ru.yourok.torrserve.server.models.torrent
 
+import ru.yourok.torrserve.server.api.ItemAction
+import ru.yourok.torrserve.server.api.ItemStatus
+
 data class Torrent(
     var title: String,
     var poster: String?,
@@ -37,17 +40,18 @@ data class Torrent(
 
     var file_stats: List<FileStat>?,
 
-    // torrmedia: "qbit" marks items that live in remote qBittorrent (null = TorrServer)
+    // torrmedia: "torrmedia" marks rows that came from torrmedia (null = TorrServer)
     var src: String? = null,
 
-    // torrmedia watch summary (ignored only for TorrServer rows)
-    var watchedFiles: Int = 0,
-    var startedFiles: Int = 0,
-    var mediaFiles: Int = 0,
-    var mediaItemPath: String = "",
+    var torrmediaFilesReady: Int = 0,
+    var torrmediaFilesTotal: Int = 0,
+    var torrmediaFilesWatched: Int = 0,
 
-    var qbitHash: String = "",
-    var qbitMagnet: String = "",
+    var torrmediaStatus: ItemStatus = ItemStatus.UNKNOWN,
+
+    var torrmediaActions: Set<ItemAction> = emptySet(),
+
+    var torrmediaMagnet: String = "",
 )
 
 data class FileStat(

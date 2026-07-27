@@ -147,13 +147,13 @@ class SettingsFragment : PreferenceFragmentCompat() {
             it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
         }
 
-        findPreference<Preference>("qbit_test")?.setOnPreferenceClickListener {
+        findPreference<Preference>("torrmedia_test")?.setOnPreferenceClickListener {
             val ctx = requireActivity()
             lifecycleScope.launch(Dispatchers.IO) {
                 val report = NetDiag.run()
                 withContext(Dispatchers.Main) {
                     AlertDialog.Builder(ctx)
-                        .setTitle(R.string.qbit_test_title)
+                        .setTitle(R.string.torrmedia_test_title)
                         .setMessage(report)
                         .setPositiveButton(android.R.string.ok, null)
                         .show()

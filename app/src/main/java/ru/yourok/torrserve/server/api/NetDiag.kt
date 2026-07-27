@@ -12,15 +12,19 @@ object NetDiag {
         report(sb, "torrmedia", Settings.getTorrmediaUrl())
         sb.appendLine("  token: ${if (Settings.getTorrmediaToken().isNotEmpty()) "set" else "not set"}")
         runCatching {
-            sb.appendLine("  API: /health ${if (TorrmediaApi.health()) "OK" else "FAILED"}")
+            val health = TorrmediaApi.health()
+            val checks = health.checks.entries.joinToString(", ") { "${it.key}=${it.value}" }
+            sb.appendLine("  API: /health OK, version=${health.version} contract=${health.contract}")
+            if (health.contract != TorrmediaApi.CONTRACT)
+                sb.appendLine("  CONTRACT MISMATCH: this build expects ${TorrmediaApi.CONTRACT}")
+            if (checks.isNotEmpty())
+                sb.appendLine("  checks: $checks")
         }.onFailure { sb.appendLine("  API: /health ${it.javaClass.simpleName}: ${it.message}") }
         runCatching {
-            val resp = TorrmediaApi.list()
-            sb.appendLine("  API: /list OK, ${resp.items.size} item(s), qbit_available=${resp.qbitAvailable}")
-        }.onFailure { sb.appendLine("  API: /list ${it.javaClass.simpleName}: ${it.message}") }
-        runCatching {
-            sb.appendLine("  API: /torrents OK, ${TorrmediaApi.torrents().size} torrent(s)")
-        }.onFailure { sb.appendLine("  API: /torrents ${it.javaClass.simpleName}: ${it.message}") }
+            val snapshot = TorrmediaApi.items()
+            sb.appendLine("  API: /items OK, ${snapshot.items.size} item(s)")
+            snapshot.degraded?.let { sb.appendLine("  degraded: $it") }
+        }.onFailure { sb.appendLine("  API: /items ${it.javaClass.simpleName}: ${it.message}") }
 
         return sb.toString().trimEnd()
     }

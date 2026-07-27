@@ -12,11 +12,13 @@ import android.widget.TextView
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.yourok.torrserve.R
 import ru.yourok.torrserve.app.App
 import ru.yourok.torrserve.atv.Utils
+import ru.yourok.torrserve.server.api.MediaState
 import ru.yourok.torrserve.server.models.torrent.Torrent
 import ru.yourok.torrserve.settings.Settings
 import ru.yourok.torrserve.ui.activities.play.PlayActivity
@@ -31,6 +33,8 @@ class TorrentsFragment : TSFragment() {
     private lateinit var emptyView: TextView
     private var sortMode: Boolean = Settings.sortTorrByTitle
 
+    private var mediaJob: Job? = null
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -42,13 +46,8 @@ class TorrentsFragment : TSFragment() {
             lvTorrents.adapter = torrentAdapter
             lvTorrents.setOnItemClickListener { _, _, i, _ ->
                 val torr = torrentAdapter?.getItem(i) as Torrent
-                if (torr.src == "media") { // hash carries the torrmedia item path
-                    DownloadsFilesFragment.newMedia(torr.hash, torr.title.ifBlank { torr.name })
-                        .show(requireActivity(), R.id.container, true)
-                    return@setOnItemClickListener
-                }
-                if (torr.src == "qbit") {
-                    DownloadsFilesFragment.newQbit(torr.hash, torr.title.ifBlank { torr.name })
+                if (torr.src == "torrmedia") {
+                    DownloadsFilesFragment.newInstance(torr.hash, torr.title.ifBlank { torr.name })
                         .show(requireActivity(), R.id.container, true)
                     return@setOnItemClickListener
                 }
@@ -131,8 +130,19 @@ class TorrentsFragment : TSFragment() {
 
     suspend fun start() = withContext(Dispatchers.Main) {
         viewModel = ViewModelProvider(this@TorrentsFragment)[TorrentsViewModel::class.java]
-        val data = (viewModel as TorrentsViewModel).getData()
-        (viewModel as TorrentsViewModel).setUpdate(true)
+        val model = viewModel as TorrentsViewModel
+        val data = model.getData()
+        model.setUpdate(true)
+        mediaJob?.cancel()
+        mediaJob = viewLifecycleOwner.lifecycleScope.launch {
+            model.mediaState.collect { state ->
+                emptyView.text = when (state) {
+                    is MediaState.Loading -> getString(R.string.torrmedia_loading)
+                    is MediaState.Failed -> state.message
+                    is MediaState.Ready -> getString(R.string.no_torrents)
+                }
+            }
+        }
         data.observe(this@TorrentsFragment) {
             torrentAdapter?.update(it)
             if (it.isEmpty()) {

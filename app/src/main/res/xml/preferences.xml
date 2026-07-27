@@ -80,8 +80,8 @@
 
     <PreferenceCategory
         style="@style/HeadPreferenceCategory"
-        android:key="qbit"
-        android:title="@string/qbit_pref_title" />
+        android:key="torrmedia"
+        android:title="@string/torrmedia_pref_title" />
 
     <EditTextPreference
         app:key="torrmedia_url"
@@ -93,22 +93,10 @@
         app:summary="@string/torrmedia_token_summary"
         app:title="@string/torrmedia_token_title" />
 
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:summary="@string/qbit_enabled_summary"
-        app:key="qbit_enabled"
-        app:title="@string/qbit_enabled_title" />
-
-    <EditTextPreference
-        android:dependency="qbit_enabled"
-        app:key="qbit_category"
-        app:summary="@string/qbit_category_summary"
-        app:title="@string/qbit_category_title" />
-
     <Preference
-        app:key="qbit_test"
-        app:summary="@string/qbit_test_summary"
-        app:title="@string/qbit_test_title" />
+        app:key="torrmedia_test"
+        app:summary="@string/torrmedia_test_summary"
+        app:title="@string/torrmedia_test_title" />
 
     <SwitchPreferenceCompat
         android:defaultValue="true"

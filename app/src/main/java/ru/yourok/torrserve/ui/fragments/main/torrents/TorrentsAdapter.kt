@@ -17,8 +17,8 @@ import com.bumptech.glide.load.resource.bitmap.BitmapTransitionOptions
 import com.bumptech.glide.load.resource.bitmap.RoundedCorners
 import com.bumptech.glide.request.RequestOptions
 import ru.yourok.torrserve.R
-import ru.yourok.torrserve.server.api.qbitStateLabel
 import ru.yourok.torrserve.server.models.torrent.Torrent
+import ru.yourok.torrserve.ui.fragments.qbit.itemStatusLabel
 import ru.yourok.torrserve.settings.Settings
 import ru.yourok.torrserve.utils.CImageSpan
 import ru.yourok.torrserve.utils.Format
@@ -100,25 +100,13 @@ class TorrentsAdapter(private val activity: FragmentActivity) : BaseAdapter() {
             vi.findViewById<TextView>(R.id.tvTorrName)?.text = title
 
         vi.findViewById<TextView>(R.id.tvTorrHash)?.text = when (list[position].src) {
-            "media", "qbit" -> {
+            "torrmedia" -> {
                 val total = list[position].torrent_size
                 val pct = if (total > 0) (list[position].loaded_size * 100 / total).toInt() else 0
                 val mark = if (pct >= 100) "\u2713" else "$pct%"
-                val label = qbitStateLabel(list[position].stat_string)
-                val baseBadge = if (label.isEmpty()) {
-                    "QBIT $mark"
-                } else {
-                    "QBIT $label $mark"
-                }
-                val badge = if (list[position].mediaFiles > 0) {
-                    val started = if (list[position].startedFiles > 0) "\u25B6 " else ""
-                    "$baseBadge  $started\u2713 ${list[position].watchedFiles}/${list[position].mediaFiles}"
-                } else {
-                    baseBadge
-                }
-                // a shelf row keeps a path in `hash`, so only real torrents append it
-                if (list[position].src == "qbit")
-                    "$badge \u25CF ${hash.uppercase(Locale.getDefault())}"
+                val badge = "${itemStatusLabel(list[position].torrmediaStatus).uppercase(Locale.getDefault())} $mark"
+                if (list[position].torrmediaFilesTotal > 0)
+                    "$badge  \u2713 ${list[position].torrmediaFilesWatched}/${list[position].torrmediaFilesTotal}"
                 else
                     badge
             }

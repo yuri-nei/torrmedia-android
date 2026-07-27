@@ -13,9 +13,9 @@ import kotlinx.coroutines.withContext
 import ru.yourok.torrserve.R
 import ru.yourok.torrserve.app.App
 import ru.yourok.torrserve.server.api.Api
-import ru.yourok.torrserve.server.api.QbitApi
+import ru.yourok.torrserve.server.api.TorrmediaApi
+import ru.yourok.torrserve.server.api.isMagnetLink
 import ru.yourok.torrserve.server.models.torrent.Torrent
-import ru.yourok.torrserve.settings.Settings
 import java.util.Locale
 
 fun PlayActivity.readArgs() {
@@ -75,12 +75,12 @@ fun PlayActivity.addAndExit() {
     finish()
 }
 
-/// torrmedia: pick a category, push the link to remote qBittorrent and close (no player)
+/// torrmedia: pick a category, push the magnet to torrmedia and close (no player)
 fun PlayActivity.qbitAndExit() {
     lifecycleScope.launch(Dispatchers.IO) {
         showProgress()
         val categories = try {
-            QbitApi.getCategories()
+            TorrmediaApi.categories()
         } catch (e: Exception) {
             hideProgress()
             App.toast(App.context.getString(R.string.qbit_categories_error) + ": " + (e.message ?: ""), true)
@@ -101,12 +101,11 @@ fun PlayActivity.qbitAndExit() {
 }
 
 private fun PlayActivity.chooseCategoryAndExit(categories: List<String>) {
-    val default = Settings.getQbitCategory()
     if (categories.isEmpty()) {
-        qbitSendAndExit(default)
+        qbitSendAndExit("")
         return
     }
-    var checked = categories.indexOf(default).coerceAtLeast(0)
+    var checked = 0
     AlertDialog.Builder(this)
         .setTitle(R.string.qbit_select_category)
         .setSingleChoiceItems(categories.toTypedArray(), checked) { _, which -> checked = which }
@@ -120,10 +119,10 @@ private fun PlayActivity.qbitSendAndExit(category: String) {
     lifecycleScope.launch(Dispatchers.IO) {
         showProgress()
         try {
-            val warnings = QbitApi.addTorrent(torrentLink, category)
+            if (!isMagnetLink(torrentLink))
+                throw IllegalArgumentException(App.context.getString(R.string.qbit_only_magnet))
+            TorrmediaApi.addItem(torrentLink.trim(), category)
             App.toast(R.string.qbit_sent)
-            if (warnings.isNotEmpty())
-                App.toast(warnings.joinToString("\n"), true)
         } catch (e: Exception) {
             App.toast(App.context.getString(R.string.qbit_send_error) + ": " + (e.message ?: ""), true)
         }

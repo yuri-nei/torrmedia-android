@@ -74,7 +74,7 @@ class ChooserFragment : TSFragment() {
             findViewById<CardView>(R.id.cvQbit)?.apply {
                 val link = (activity as? PlayActivity)?.torrentLink ?: ""
                 val scheme = Uri.parse(link).scheme?.lowercase() ?: ""
-                if (Settings.getQbitEnabled() && scheme in listOf("magnet", "http", "https"))
+                if (Settings.getTorrmediaUrl().isNotEmpty() && scheme == "magnet")
                     visibility = View.VISIBLE
                 setOnClickListener {
                     lifecycleScope.launch {

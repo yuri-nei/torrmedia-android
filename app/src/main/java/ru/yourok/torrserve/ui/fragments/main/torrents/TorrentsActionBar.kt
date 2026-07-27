@@ -21,11 +21,9 @@ import ru.yourok.torrserve.R
 import ru.yourok.torrserve.app.App
 import androidx.appcompat.app.AlertDialog
 import ru.yourok.torrserve.server.api.Api
+import ru.yourok.torrserve.server.api.ItemAction
 import ru.yourok.torrserve.server.api.TorrmediaApi
-import ru.yourok.torrserve.server.api.QbitApi
-import ru.yourok.torrserve.server.api.resolveSingleByHash
 import ru.yourok.torrserve.server.models.torrent.Torrent
-import ru.yourok.torrserve.settings.Settings
 import ru.yourok.torrserve.ui.activities.play.PlayActivity
 import ru.yourok.torrserve.utils.TorrentHelper
 import ru.yourok.torrserve.utils.TorrentHelper.getTorrentMagnet
@@ -56,7 +54,7 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
         when (item.itemId) {
             R.id.itemOpenWith -> {
                 val magnetUris = mutableListOf<Uri>()
-                selected.filter { it.src != "media" }.forEach {
+                selected.filter { getTorrentMagnet(it).isNotEmpty() }.forEach {
                     val magnet = getTorrentMagnet(it)
                     if (magnet.isNotEmpty()) {
                         magnetUris.add(Uri.parse(magnet))
@@ -101,7 +99,7 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
             }
 
             R.id.itemShareMagnet -> {
-                val msg = selected.filter { it.src != "media" }.joinToString("\n\n") { getTorrentMagnet(it) }
+                val msg = selected.filter { getTorrentMagnet(it).isNotEmpty() }.joinToString("\n\n") { getTorrentMagnet(it) }
                 if (msg.isNotEmpty()) {
                     val share = Intent().apply {
                         action = Intent.ACTION_SEND
@@ -116,7 +114,7 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
             }
 
             R.id.itemCopyMagnet -> {
-                val msg = selected.filter { it.src != "media" }.joinToString("\n\n") { getTorrentMagnet(it) }
+                val msg = selected.filter { getTorrentMagnet(it).isNotEmpty() }.joinToString("\n\n") { getTorrentMagnet(it) }
                 if (msg.isNotEmpty()) {
                     val clipboard = App.context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     val clip = ClipData.newPlainText("magnets", msg)
@@ -130,8 +128,8 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
                 val local = selected.filter { it.src == null }
                 if (remote.isNotEmpty()) {
                     AlertDialog.Builder(listView.context)
-                        .setTitle(R.string.qbit_delete_torrent)
-                        .setMessage(R.string.qbit_delete_torrent_confirm)
+                        .setTitle(R.string.torrmedia_action_remove_with_data)
+                        .setMessage(R.string.torrmedia_remove_with_data_confirm)
                         .setPositiveButton(android.R.string.ok) { _, _ ->
                             thread {
                                 removeLocal(local)
@@ -149,13 +147,10 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
                 thread {
                     selected.forEach {
                         try {
-                            when (it.src) {
-                                "media" -> TorrmediaApi.remViewedItem(it.hash)
-                                "qbit" -> if (it.mediaItemPath.isNotEmpty())
-                                    TorrmediaApi.remViewedItem(it.mediaItemPath)
-
-                                else -> Api.remViewed(it.hash)
-                            }
+                            if (it.src == "torrmedia")
+                                TorrmediaApi.clearViewedItem(it.hash)
+                            else
+                                Api.remViewed(it.hash)
                         } catch (e: Exception) {
                             e.printStackTrace()
                         }
@@ -193,35 +188,12 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
 
     private fun removeRemote(torr: Torrent) {
         try {
-            if (torr.src == "media") {
-                // hash carries the torrmedia item path; a live torrent must go
-                // as a whole, else qBit re-downloads the files we just deleted.
-                // If qBit is configured but temporarily unavailable, fail closed:
-                // treating an API error as "torrent is gone" would only remove shelf
-                // files and then incorrectly purge the torrent's viewed history.
-                val resp = TorrmediaApi.list()
-                if (Settings.getQbitEnabled() && !resp.qbitAvailable)
-                    throw IllegalStateException(App.context.getString(R.string.qbit_stale_qbit))
-                val item = resp.items.find { it.path == torr.hash }
-                    ?: throw IllegalStateException(App.context.getString(R.string.qbit_item_not_found))
-                val warnings = mutableListOf<String>()
-                if (item.torrentHash.isNotEmpty()) {
-                    val live = resolveSingleByHash(item.torrentHash, QbitApi.listTorrents()) { it.hash }
-                        ?: throw IllegalStateException(App.context.getString(R.string.qbit_item_not_found))
-                    warnings += QbitApi.deleteTorrent(live.hash, true)
-                } else {
-                    item.files.forEach { warnings += TorrmediaApi.deleteFile(it.path) }
-                }
-                TorrmediaApi.remViewedItem(torr.hash)
-                if (warnings.isNotEmpty())
-                    App.toast(warnings.joinToString("\n"), true)
-            } else {
-                val warnings = QbitApi.deleteTorrent(torr.hash, true)
-                if (torr.mediaItemPath.isNotEmpty())
-                    TorrmediaApi.remViewedItem(torr.mediaItemPath)
-                if (warnings.isNotEmpty())
-                    App.toast(warnings.joinToString("\n"), true)
+            val withData = ItemAction.REMOVE_WITH_DATA in torr.torrmediaActions
+            if (!withData && ItemAction.REMOVE !in torr.torrmediaActions) {
+                App.toast(App.context.getString(R.string.torrmedia_action_unavailable), true)
+                return
             }
+            TorrmediaApi.removeItem(torr.hash, withData)
         } catch (e: Exception) {
             App.toast(App.context.getString(R.string.qbit_send_error) + ": " + (e.message ?: ""), true)
         }

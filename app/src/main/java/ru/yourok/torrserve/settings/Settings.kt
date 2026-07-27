@@ -62,10 +62,6 @@ object Settings {
     fun getChooserAction(): Int = get("chooser_action", 0)
     fun setChooserAction(v: Int) = set("chooser_action", v)
 
-    fun getQbitEnabled(): Boolean = get("qbit_enabled", false)
-
-    fun getQbitCategory(): String = get("qbit_category", "").trim()
-
     fun getTorrmediaUrl(): String = withHttpScheme(get("torrmedia_url", ""))
 
     fun getTorrmediaToken(): String = get("torrmedia_token", "").trim()
