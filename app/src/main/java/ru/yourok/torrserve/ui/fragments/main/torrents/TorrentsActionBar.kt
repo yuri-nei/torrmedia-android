@@ -204,18 +204,23 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
                     throw IllegalStateException(App.context.getString(R.string.qbit_stale_qbit))
                 val item = resp.items.find { it.path == torr.hash }
                     ?: throw IllegalStateException(App.context.getString(R.string.qbit_item_not_found))
+                val warnings = mutableListOf<String>()
                 if (item.torrentHash.isNotEmpty()) {
                     val live = resolveSingleByHash(item.torrentHash, QbitApi.listTorrents()) { it.hash }
                         ?: throw IllegalStateException(App.context.getString(R.string.qbit_item_not_found))
-                    QbitApi.deleteTorrent(live.hash, true)
+                    warnings += QbitApi.deleteTorrent(live.hash, true)
                 } else {
-                    item.files.forEach { TorrmediaApi.deleteFile(it.path) }
+                    item.files.forEach { warnings += TorrmediaApi.deleteFile(it.path) }
                 }
                 TorrmediaApi.remViewedItem(torr.hash)
+                if (warnings.isNotEmpty())
+                    App.toast(warnings.joinToString("\n"), true)
             } else {
-                QbitApi.deleteTorrent(torr.hash, true)
+                val warnings = QbitApi.deleteTorrent(torr.hash, true)
                 if (torr.mediaItemPath.isNotEmpty())
                     TorrmediaApi.remViewedItem(torr.mediaItemPath)
+                if (warnings.isNotEmpty())
+                    App.toast(warnings.joinToString("\n"), true)
             }
         } catch (e: Exception) {
             App.toast(App.context.getString(R.string.qbit_send_error) + ": " + (e.message ?: ""), true)

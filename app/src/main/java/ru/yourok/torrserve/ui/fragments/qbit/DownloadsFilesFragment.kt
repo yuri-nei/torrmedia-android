@@ -314,11 +314,7 @@ class DownloadsFilesFragment : TSFragment() {
             torrItemPath = when {
                 torrmediaItem != null -> torrmediaItem.path
                 mode == MODE_MEDIA -> id
-                torrent != null -> {
-                    val category = torrent.savePath.trimEnd('/').substringAfterLast('/')
-                    val content = torrent.contentPath.trimEnd('/').substringAfterLast('/')
-                    listOf(category, content).filter { it.isNotEmpty() }.joinToString("/")
-                }
+                torrent != null -> torrent.itemPath
                 else -> ""
             }
             val viewedByPath = if (torrItemPath.isNotEmpty()) {
@@ -333,32 +329,19 @@ class DownloadsFilesFragment : TSFragment() {
 
             val rows = if (torrent != null) {
                 val qFiles = QbitApi.getFiles(torrent.hash)
-                val saveLeaf = torrent.savePath.trimEnd('/').substringAfterLast('/')
                 val qRows = qFiles.map { f ->
-                    // Automatic management normally produces shows/<qBit name>. A torrent
-                    // previously added in manual mode can instead sit directly under the
-                    // torrmedia root, so check both exact layouts.
-                    val qbitName = f.name.trimStart('/')
-                    val itemLeaf = torrItemPath.substringAfterLast('/')
-                    val itemPath = when {
-                        torrItemPath.isEmpty() -> ""
-                        qbitName == itemLeaf || qbitName.startsWith("$itemLeaf/") ->
-                            "$saveLeaf/$qbitName"
-                        else -> "$torrItemPath/$qbitName"
-                    }
-                    val pathCandidates = listOf(itemPath, "$saveLeaf/$qbitName", qbitName)
-                        .filter { it.isNotEmpty() }
-                        .map { it.trimStart('/') }
-                        .distinct()
+                    val shelfPath = f.path.trimStart('/')
                     val exact = torrmediaFiles.filter { ownedBy(it, torrent.hash) && it.qbitFileId == f.index }
                     val torrmediaMatch = if (exact.size == 1) exact[0] else
-                        torrmediaFiles.find { matchesFileName(it.path, f.name) }
-                            ?: allTorrmediaFiles.find { it.path in pathCandidates }
-                    val viewedMatch = pathCandidates.firstNotNullOfOrNull { viewedByPath[it] }
+                        shelfPath.takeIf { it.isNotEmpty() }?.let { p ->
+                            torrmediaFiles.find { it.path == p } ?: allTorrmediaFiles.find { it.path == p }
+                        }
+                    val viewedMatch = shelfPath.takeIf { it.isNotEmpty() }?.let { viewedByPath[it] }
                     // the shelf decides, not qBit's piece map (it calls deleted files complete until
                     // a recheck, docs/09) — but a file qBit just created is on disk yet still empty,
                     // so the size on disk must also have caught up with the expected one
                     val ready = fileReady(
+                        serverReady = f.ready,
                         exactShelfSize = if (exact.size == 1) exact[0].size else null,
                         fallbackShelfSize = torrmediaMatch?.size,
                         expectedSize = f.size,
@@ -375,7 +358,7 @@ class DownloadsFilesFragment : TSFragment() {
                     )
                     Row(
                         name = File(f.name).name,
-                        torrmediaPath = torrmediaMatch?.path ?: pathCandidates.first(),
+                        torrmediaPath = torrmediaMatch?.path ?: shelfPath,
                         size = if (ready && torrmediaMatch != null) torrmediaMatch.size else f.size, // unfinished rows show the target size
                         pct = (f.progress * 100).toInt(),
                         state = state,
@@ -387,7 +370,8 @@ class DownloadsFilesFragment : TSFragment() {
                         identified = torrIdentified && f.index >= 0,
                     )
                 }
-                val extras = torrmediaFiles.filter { mf -> qFiles.none { qf -> matchesFileName(mf.path, qf.name) } }
+                val takenPaths = qRows.map { it.torrmediaPath }.filter { it.isNotEmpty() }.toSet()
+                val extras = torrmediaFiles.filter { it.path !in takenPaths }
                     .map { shelfRow(it, viewedByPath) }
                 qRows + extras
             } else {
@@ -420,9 +404,6 @@ class DownloadsFilesFragment : TSFragment() {
     private fun ownedBy(file: TorrmediaFile, hash: String): Boolean =
         file.torrentHash.isNotEmpty() && normalizeHash(file.torrentHash) == normalizeHash(hash) &&
                 file.qbitFileId >= 0
-
-    private fun matchesFileName(torrmediaPath: String, qbitName: String): Boolean =
-        torrmediaPath == qbitName || torrmediaPath.endsWith("/$qbitName")
 
     private fun shelfRow(file: TorrmediaFile, viewedByPath: Map<String, TorrmediaViewed>): Row =
         Row(
@@ -470,7 +451,7 @@ class DownloadsFilesFragment : TSFragment() {
         val total = torrent?.size ?: rows.sumOf { it.size }
         // "completed" counts the selected files only; "downloaded" includes deselected leftovers
         // and can exceed the torrent size, which is where the >100% came from
-        val ready = torrent?.completed ?: rows.filter { it.state == FileState.DOWNLOADED }.sumOf { it.size }
+        val ready = torrent?.completedBytes ?: rows.filter { it.state == FileState.DOWNLOADED }.sumOf { it.size }
         val pct = ((torrent?.progress ?: 1.0) * 100).toInt().coerceIn(0, 100)
         val checking = torrent != null && qbitIsChecking(torrent.state)
         val inProgress = torrent != null && pct < 100 && !checking
@@ -647,11 +628,9 @@ class DownloadsFilesFragment : TSFragment() {
             when (action) {
                 HeaderAction.START_DOWNLOAD -> if (QbitApi.startTorrent(hash))
                     App.toast(R.string.qbit_stalled_warn, true)
-                HeaderAction.START_SEEDING -> QbitApi.resumeTorrent(hash)
-                HeaderAction.STOP_DOWNLOAD, HeaderAction.STOP_GENERIC, HeaderAction.STOP_SEEDING -> {
-                    QbitApi.setForceStart(hash, false)
-                    QbitApi.pauseTorrent(hash)
-                }
+                HeaderAction.START_SEEDING -> showWarnings(QbitApi.resumeTorrent(hash))
+                HeaderAction.STOP_DOWNLOAD, HeaderAction.STOP_GENERIC, HeaderAction.STOP_SEEDING ->
+                    showWarnings(QbitApi.pauseTorrent(hash))
             }
         }
     }
@@ -829,7 +808,7 @@ class DownloadsFilesFragment : TSFragment() {
                 val itemPath = torrItemPath.ifEmpty { if (mode == MODE_MEDIA) id else "" }
                 val warnings = mutableListOf<String>()
                 if (torrHash.isNotEmpty()) {
-                    QbitApi.deleteTorrent(torrHash, true)
+                    warnings += QbitApi.deleteTorrent(torrHash, true)
                 } else {
                     val items = TorrmediaApi.list().items
                     val item = when (mode) {
@@ -853,6 +832,10 @@ class DownloadsFilesFragment : TSFragment() {
     }
 
     private fun openExternal(row: Row) {
+        if (row.torrmediaPath.isEmpty()) {
+            App.toast(R.string.qbit_item_not_found, true)
+            return
+        }
         val url = try {
             TorrmediaApi.playUrl(row.torrmediaPath)
         } catch (e: Exception) {

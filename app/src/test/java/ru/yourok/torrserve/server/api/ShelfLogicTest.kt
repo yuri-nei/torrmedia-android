@@ -101,4 +101,125 @@ class ShelfLogicTest {
         assertTrue(parseTorrmediaResult("OK").ok)
         assertTrue(parseTorrmediaResult("{}").ok)
     }
+
+
+    private val torrentsBody = """
+        {"ok":true,"qbit_available":true,"torrents":[
+          {"hash":"AE7D01","name":"Release","state":"stoppedUP","progress":1.0,
+           "category":"Shows","save_path":"/var/media/library/shows","content_path":"/x",
+           "size":31069126553,"amount_left":0,"force_start":false,
+           "item_path":"shows/Release"}]}
+    """.trimIndent()
+
+    @Test
+    fun `torrent list maps the contract fields`() {
+        val list = parseTorrentList(torrentsBody)
+        assertEquals(1, list.size)
+        val t = list[0]
+        assertEquals("AE7D01", t.hash)
+        assertEquals("Release", t.name)
+        assertEquals("stoppedUP", t.state)
+        assertEquals("Shows", t.category)
+        assertEquals(31069126553L, t.size)
+        assertEquals(0L, t.amountLeft)
+        assertFalse(t.forceStart)
+        assertEquals("shows/Release", t.itemPath)
+    }
+
+    @Test
+    fun `completed bytes fall back to size and progress`() {
+        val t = parseTorrentList(torrentsBody)[0]
+        assertEquals(31069126553L, t.completedBytes)
+        assertEquals(50L, QbitTorrent(size = 100, progress = 0.5).completedBytes)
+        assertEquals(7L, QbitTorrent(size = 100, progress = 0.5, completed = 7).completedBytes)
+    }
+
+    @Test
+    fun `torrents error is never an empty list`() {
+        assertThrows { parseTorrentList("""{"ok":false,"error":"qbit refused"}""") }
+        assertThrows { parseTorrentList("""{"ok":true,"qbit_available":false,"torrents":[]}""") }
+        assertThrows { parseTorrentList("""{"ok":true,"torrents":[]}""") }
+        assertThrows { parseTorrentList("<html>login</html>") }
+    }
+
+    @Test
+    fun `ok false carries the server text`() {
+        val e = runCatching { parseTorrentList("""{"ok":false,"error":"qbit refused"}""") }.exceptionOrNull()
+        assertTrue(e is TorrmediaApi.TorrmediaException)
+        assertTrue(e?.message?.contains("qbit refused") == true)
+    }
+
+    @Test
+    fun `torrent detail maps files with qbit ids`() {
+        val detail = parseTorrentDetail(
+            """
+            {"ok":true,"hash":"AE7D01","name":"Release","state":"downloading","progress":0.5,
+             "category":"Shows","item_path":"shows/Release","force_start":true,
+             "files":[{"id":0,"name":"release/e01.mkv","path":"shows/Release/e01.mkv",
+                       "size":123,"priority":1,"progress":1.0,"ready":true},
+                      {"id":4,"name":"release/e02.mkv","path":"","size":456,
+                       "priority":0,"progress":0.0,"ready":false}]}
+            """.trimIndent()
+        )
+        assertEquals("AE7D01", detail.torrent.hash)
+        assertEquals("shows/Release", detail.torrent.itemPath)
+        assertTrue(detail.torrent.forceStart)
+        assertEquals(2, detail.files.size)
+        assertEquals(0, detail.files[0].index)
+        assertEquals(4, detail.files[1].index)
+        assertEquals("shows/Release/e01.mkv", detail.files[0].path)
+        assertEquals(true, detail.files[0].ready)
+        assertEquals(false, detail.files[1].ready)
+        assertEquals("", detail.files[1].path)
+        assertEquals(0, detail.files[1].priority)
+    }
+
+    @Test
+    fun `torrent detail without files is not an error`() {
+        val detail = parseTorrentDetail("""{"ok":true,"hash":"AE7D01","name":"Release"}""")
+        assertEquals("AE7D01", detail.torrent.hash)
+        assertTrue(detail.files.isEmpty())
+    }
+
+    @Test
+    fun `categories are sorted names`() {
+        val cats = parseCategories(
+            """
+            {"ok":true,"categories":[{"name":"Shows","save_path":"/var/media/library/shows"},
+                                     {"name":"Movies","save_path":"/var/media/library/movies"}]}
+            """.trimIndent()
+        )
+        assertEquals(listOf("Movies", "Shows"), cats)
+    }
+
+    @Test
+    fun `categories error is not an empty list`() {
+        assertThrows { parseCategories("""{"ok":false,"error":"unauthorized"}""") }
+        assertThrows { parseCategories("Unauthorized") }
+        assertEquals(emptyList<String>(), parseCategories("""{"ok":true,"categories":[]}"""))
+    }
+
+    @Test
+    fun `only magnet links are accepted for add`() {
+        assertTrue(isMagnetLink("magnet:?xt=urn:btih:ae7d"))
+        assertTrue(isMagnetLink("  MAGNET:?xt=urn:btih:ae7d"))
+        assertFalse(isMagnetLink("https://tracker.example/torrent.torrent"))
+        assertFalse(isMagnetLink("content://downloads/1"))
+        assertFalse(isMagnetLink(""))
+    }
+
+    private fun assertThrows(block: () -> Unit) {
+        val e = runCatching { block() }.exceptionOrNull()
+        assertTrue("expected an exception", e != null)
+    }
+
+    @Test
+    fun `missing ready stays null instead of false`() {
+        val json = """{"ok":true,"hash":"aabb","name":"R","state":"stoppedUP","progress":1.0,
+                       "category":"Shows","item_path":"shows/R","force_start":false,
+                       "files":[{"id":0,"name":"e01.mkv","path":"shows/R/e01.mkv",
+                                 "size":123,"priority":1,"progress":1.0}]}"""
+        val detail = parseTorrentDetail(json)
+        assertEquals(null, detail.files[0].ready)
+    }
 }

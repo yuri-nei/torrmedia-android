@@ -1,7 +1,9 @@
 package ru.yourok.torrserve.server.api
 
+import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import com.google.gson.reflect.TypeToken
 
 
 fun normalizeHash(hash: String): String = hash.trim().lowercase()
@@ -63,3 +65,54 @@ fun parseTorrmediaResult(body: String): TorrmediaResult {
         ?: emptyList()
     return TorrmediaResult(ok, error, warnings)
 }
+
+
+data class TorrmediaTorrentDetail(
+    val torrent: QbitTorrent = QbitTorrent(),
+    val files: List<QbitFile> = emptyList(),
+)
+
+private val torrmediaGson = Gson()
+
+private fun requireOkObject(op: String, body: String): JsonObject {
+    val result = parseTorrmediaResult(body)
+    if (!result.ok)
+        throw TorrmediaApi.TorrmediaException("$op: ${result.error.ifEmpty { "server reported failure" }}")
+    return runCatching { JsonParser.parseString(body.trim()) as? JsonObject }.getOrNull()
+        ?: throw TorrmediaApi.TorrmediaException("$op: unexpected response \"${body.trim().take(60)}\"")
+}
+
+fun parseTorrentList(body: String): List<QbitTorrent> {
+    val obj = requireOkObject("torrents", body)
+    val available = obj.get("qbit_available")?.takeIf { !it.isJsonNull }
+        ?.let { runCatching { it.asBoolean }.getOrDefault(false) } ?: false
+    if (!available)
+        throw TorrmediaApi.TorrmediaException("torrents: qBittorrent is unavailable")
+    val arr = obj.get("torrents")?.takeIf { it.isJsonArray }?.asJsonArray ?: return emptyList()
+    return torrmediaGson.fromJson(arr, object : TypeToken<List<QbitTorrent>>() {}.type) ?: emptyList()
+}
+
+fun parseTorrentDetail(body: String): TorrmediaTorrentDetail {
+    val obj = requireOkObject("torrent", body)
+    val torrent = torrmediaGson.fromJson(obj, QbitTorrent::class.java) ?: QbitTorrent()
+    val files: List<QbitFile> = obj.get("files")?.takeIf { it.isJsonArray }?.asJsonArray
+        ?.let { torrmediaGson.fromJson(it, object : TypeToken<List<QbitFile>>() {}.type) }
+        ?: emptyList()
+    return TorrmediaTorrentDetail(torrent, files)
+}
+
+fun parseCategories(body: String): List<String> {
+    val obj = requireOkObject("categories", body)
+    val arr = obj.get("categories")?.takeIf { it.isJsonArray }?.asJsonArray ?: return emptyList()
+    return arr.mapNotNull { el ->
+        when {
+            el.isJsonObject -> el.asJsonObject.get("name")?.takeIf { !it.isJsonNull }
+                ?.let { runCatching { it.asString }.getOrNull() }
+
+            el.isJsonPrimitive -> runCatching { el.asString }.getOrNull()
+            else -> null
+        }
+    }.filter { it.isNotBlank() }.distinct().sorted()
+}
+
+fun isMagnetLink(link: String): Boolean = link.trim().startsWith("magnet:", true)

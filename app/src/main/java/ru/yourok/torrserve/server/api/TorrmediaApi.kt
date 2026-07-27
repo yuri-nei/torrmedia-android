@@ -61,12 +61,6 @@ data class TorrmediaViewed(
 
 private data class TorrmediaViewedResp(val items: List<TorrmediaViewed> = emptyList())
 
-/**
- * Client for the torrmedia service (docs/09) — the VPS-side gallery of downloaded files.
- * Contract: GET /list, GET /file?path (Range), DELETE /file?path,
- * DELETE /file?hash&id and GET /health. VPN-only.
- * All the qBittorrent single-file-deletion workarounds live on the server side, not here.
- */
 object TorrmediaApi {
     class TorrmediaException(msg: String, val statusCode: Int = 0) : Exception(msg)
 
@@ -88,9 +82,33 @@ object TorrmediaApi {
             .ignoreContentType(true)
             .maxBodySize(0)
             .timeout(timeoutMs)
+        val token = Settings.getTorrmediaToken()
+        if (token.isNotEmpty())
+            conn.header("Authorization", "Bearer $token")
         if (!isBrokenTCL)
             conn.sslSocketFactory(TlsSocketFactory())
         return conn
+    }
+
+    private fun getBody(op: String, path: String): String {
+        val resp = connect("${base()}$path")
+            .method(Connection.Method.GET)
+            .execute()
+        if (resp.statusCode() !in 200..299) {
+            val error = parseTorrmediaResult(resp.body()).error
+            throw TorrmediaException(
+                "$op: HTTP ${resp.statusCode()} ${error.ifEmpty { resp.body().take(120) }}",
+                resp.statusCode()
+            )
+        }
+        return resp.body()
+    }
+
+    private fun post(op: String, path: String): List<String> {
+        val resp = connect("${base()}$path", operationTimeout)
+            .method(Connection.Method.POST)
+            .execute()
+        return checkResult(op, resp)
     }
 
     fun list(): TorrmediaList {
@@ -151,6 +169,29 @@ object TorrmediaApi {
             .execute()
         return checkResult("enable", resp)
     }
+
+    fun torrents(): List<QbitTorrent> = parseTorrentList(getBody("torrents", "/torrents"))
+
+    fun torrent(hash: String): TorrmediaTorrentDetail =
+        parseTorrentDetail(getBody("torrent", "/torrent?hash=${Uri.encode(hash)}"))
+
+    fun categories(): List<String> = parseCategories(getBody("categories", "/categories"))
+
+    fun addTorrent(magnet: String, category: String): List<String> {
+        var path = "/add?magnet=${Uri.encode(magnet)}"
+        if (category.isNotEmpty())
+            path += "&category=${Uri.encode(category)}"
+        return post("add", path)
+    }
+
+    fun startTorrent(hash: String): List<String> = post("start", "/start?hash=${Uri.encode(hash)}")
+
+    fun stopTorrent(hash: String): List<String> = post("stop", "/stop?hash=${Uri.encode(hash)}")
+
+    fun recheckTorrent(hash: String): List<String> = post("recheck", "/recheck?hash=${Uri.encode(hash)}")
+
+    fun removeTorrent(hash: String, deleteFiles: Boolean): List<String> =
+        post("remove", "/remove?hash=${Uri.encode(hash)}&delete_files=$deleteFiles")
 
     fun listViewed(item: String? = null): List<TorrmediaViewed> {
         val suffix = item?.let { "?item=${Uri.encode(it)}" } ?: ""

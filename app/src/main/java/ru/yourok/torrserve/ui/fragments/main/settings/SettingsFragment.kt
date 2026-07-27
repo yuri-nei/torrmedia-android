@@ -143,10 +143,6 @@ class SettingsFragment : PreferenceFragmentCompat() {
             true
         }
 
-        findPreference<EditTextPreference>("qbit_url")?.setOnBindEditTextListener {
-            it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-        }
-
         findPreference<EditTextPreference>("torrmedia_url")?.setOnBindEditTextListener {
             it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
         }
@@ -166,7 +162,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
             true
         }
 
-        findPreference<EditTextPreference>("qbit_pass")?.setOnBindEditTextListener {
+        findPreference<EditTextPreference>("torrmedia_token")?.setOnBindEditTextListener {
             it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
         }
 

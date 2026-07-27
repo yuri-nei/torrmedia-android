@@ -47,12 +47,6 @@ class TorrentsViewModel : ViewModel() {
         const val FILES_RETRY_DELAY = 60_000L // ms
     }
 
-    private fun inferredItemPath(torrent: QbitTorrent): String {
-        val category = torrent.savePath.trimEnd('/').substringAfterLast('/')
-        val content = torrent.contentPath.trimEnd('/').substringAfterLast('/')
-        return listOf(category, content).filter { it.isNotEmpty() }.joinToString("/")
-    }
-
     private fun applyWatchSummary(
         ui: Torrent,
         itemPath: String,
@@ -109,7 +103,7 @@ class TorrentsViewModel : ViewModel() {
                     // the shelf row shows live download state instead of a second row for the torrent
                     ui.stat_string = t.state
                     ui.torrent_size = t.size
-                    ui.loaded_size = t.completed
+                    ui.loaded_size = t.completedBytes
                     ui.qbitMagnet = t.magnetUri
                 }
                 applyWatchSummary(ui, item.path, item.files.map { it.path }, live?.let { qbitFileTotals[it.hash] } ?: 0)
@@ -120,8 +114,7 @@ class TorrentsViewModel : ViewModel() {
                 .filter { t -> normalizeHash(t.hash) !in shelfHashes }
                 .map { torrent ->
                     val ui = torrent.toUiTorrent()
-                    val itemPath = inferredItemPath(torrent)
-                    applyWatchSummary(ui, itemPath, emptyList(), qbitFileTotals[torrent.hash] ?: 0)
+                    applyWatchSummary(ui, torrent.itemPath, emptyList(), qbitFileTotals[torrent.hash] ?: 0)
                     ui
                 }
             downloadsCache = shelf + qbitOnly

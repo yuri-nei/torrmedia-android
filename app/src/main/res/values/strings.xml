@@ -323,18 +323,17 @@
     <string name="qbit_sent">Sent to qBittorrent</string>
     <string name="qbit_send_error">qBittorrent error</string>
     <string name="qbit_pref_title" translatable="false">qBittorrent</string>
-    <string name="qbit_enabled_title">Send to qBittorrent</string>
-    <string name="qbit_enabled_summary">Show \u201cDownload (qBittorrent)\u201d action for new torrents</string>
-    <string name="qbit_url_title">qBittorrent address</string>
-    <string name="qbit_url_summary">WebUI URL, e.g. http://host:8080</string>
-    <string name="qbit_user_title">qBittorrent username</string>
-    <string name="qbit_pass_title">qBittorrent password</string>
+    <string name="qbit_enabled_title">Show qBittorrent transfers</string>
+    <string name="qbit_enabled_summary">Show live torrents and the \u201cDownload (qBittorrent)\u201d action</string>
     <string name="qbit_category_title">Default category</string>
     <string name="qbit_category_summary">Used when the category list is unavailable</string>
+    <string name="qbit_only_magnet">Only magnet links can be sent</string>
     <string name="torrmedia_url_title">torrmedia address</string>
-    <string name="torrmedia_url_summary">Downloads service URL, e.g. http://host:8091</string>
+    <string name="torrmedia_url_summary">Service URL, e.g. http://host:8091 \u2014 the only address the app needs</string>
+    <string name="torrmedia_token_title">torrmedia token</string>
+    <string name="torrmedia_token_summary">Optional, sent as Authorization: Bearer</string>
     <string name="qbit_test_title">Check connection</string>
-    <string name="qbit_test_summary">TCP and API self-test for qBittorrent and torrmedia</string>
+    <string name="qbit_test_summary">TCP and API self-test for torrmedia</string>
     <string name="qbit_delete_torrent">Delete torrent</string>
     <string name="qbit_delete_torrent_confirm">The torrent and its files on the server will be deleted</string>
     <string name="qbit_delete_file">Delete episode</string>

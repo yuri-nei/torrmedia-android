@@ -120,8 +120,10 @@ private fun PlayActivity.qbitSendAndExit(category: String) {
     lifecycleScope.launch(Dispatchers.IO) {
         showProgress()
         try {
-            QbitApi.addTorrent(torrentLink, category)
+            val warnings = QbitApi.addTorrent(torrentLink, category)
             App.toast(R.string.qbit_sent)
+            if (warnings.isNotEmpty())
+                App.toast(warnings.joinToString("\n"), true)
         } catch (e: Exception) {
             App.toast(App.context.getString(R.string.qbit_send_error) + ": " + (e.message ?: ""), true)
         }

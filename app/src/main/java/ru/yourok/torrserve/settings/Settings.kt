@@ -62,15 +62,13 @@ object Settings {
     fun getChooserAction(): Int = get("chooser_action", 0)
     fun setChooserAction(v: Int) = set("chooser_action", v)
 
-    // qBittorrent remote (Qbit fork)
     fun getQbitEnabled(): Boolean = get("qbit_enabled", false)
-    fun getQbitUrl(): String = withHttpScheme(get("qbit_url", ""))
 
-    fun getQbitUser(): String = get("qbit_user", "")
-    fun getQbitPass(): String = get("qbit_pass", "")
     fun getQbitCategory(): String = get("qbit_category", "").trim()
 
     fun getTorrmediaUrl(): String = withHttpScheme(get("torrmedia_url", ""))
+
+    fun getTorrmediaToken(): String = get("torrmedia_token", "").trim()
 
     private fun withHttpScheme(raw: String): String {
         val url = raw.trim().trimEnd('/')

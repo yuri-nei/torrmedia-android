@@ -5,29 +5,22 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.URL
 
-/**
- * torrmedia: connectivity self-test for the settings screen.
- * Reports raw TCP reachability separately from the HTTP layer, so a broken URL,
- * a blocked port and a bug in the API client can be told apart without adb.
- */
 object NetDiag {
 
     fun run(): String {
         val sb = StringBuilder()
-        report(sb, "qBittorrent", Settings.getQbitUrl())
-        runCatching { sb.appendLine("  login: ${QbitApi.loginProbe()}") }
-            .onFailure { sb.appendLine("  login: ${it.javaClass.simpleName}: ${it.message}") }
-        runCatching {
-            val list = QbitApi.listTorrents()
-            sb.appendLine("  API: torrents/info OK, ${list.size} torrent(s)")
-        }.onFailure { sb.appendLine("  API: ${it.javaClass.simpleName}: ${it.message}") }
-
-        sb.appendLine()
         report(sb, "torrmedia", Settings.getTorrmediaUrl())
+        sb.appendLine("  token: ${if (Settings.getTorrmediaToken().isNotEmpty()) "set" else "not set"}")
+        runCatching {
+            sb.appendLine("  API: /health ${if (TorrmediaApi.health()) "OK" else "FAILED"}")
+        }.onFailure { sb.appendLine("  API: /health ${it.javaClass.simpleName}: ${it.message}") }
         runCatching {
             val resp = TorrmediaApi.list()
             sb.appendLine("  API: /list OK, ${resp.items.size} item(s), qbit_available=${resp.qbitAvailable}")
-        }.onFailure { sb.appendLine("  API: ${it.javaClass.simpleName}: ${it.message}") }
+        }.onFailure { sb.appendLine("  API: /list ${it.javaClass.simpleName}: ${it.message}") }
+        runCatching {
+            sb.appendLine("  API: /torrents OK, ${TorrmediaApi.torrents().size} torrent(s)")
+        }.onFailure { sb.appendLine("  API: /torrents ${it.javaClass.simpleName}: ${it.message}") }
 
         return sb.toString().trimEnd()
     }
