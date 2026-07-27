@@ -26,18 +26,6 @@ fun screenDataValid(
 fun needsQbitBackend(qbitMode: Boolean, owners: List<String>): Boolean =
     qbitMode || owners.any { it != FileOwner.NONE }
 
-fun fileReady(
-    serverReady: Boolean?,
-    exactShelfSize: Long?,
-    fallbackShelfSize: Long?,
-    expectedSize: Long,
-    qbitProgress: Double,
-): Boolean = when {
-    serverReady != null -> serverReady
-    exactShelfSize != null -> exactShelfSize >= expectedSize
-    else -> (fallbackShelfSize != null && fallbackShelfSize >= expectedSize) || qbitProgress >= 1.0
-}
-
 fun classifyFileState(
     dataValid: Boolean,
     ready: Boolean,

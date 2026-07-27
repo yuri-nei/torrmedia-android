@@ -337,16 +337,7 @@ class DownloadsFilesFragment : TSFragment() {
                             torrmediaFiles.find { it.path == p } ?: allTorrmediaFiles.find { it.path == p }
                         }
                     val viewedMatch = shelfPath.takeIf { it.isNotEmpty() }?.let { viewedByPath[it] }
-                    // the shelf decides, not qBit's piece map (it calls deleted files complete until
-                    // a recheck, docs/09) — but a file qBit just created is on disk yet still empty,
-                    // so the size on disk must also have caught up with the expected one
-                    val ready = fileReady(
-                        serverReady = f.ready,
-                        exactShelfSize = if (exact.size == 1) exact[0].size else null,
-                        fallbackShelfSize = torrmediaMatch?.size,
-                        expectedSize = f.size,
-                        qbitProgress = f.progress,
-                    )
+                    val ready = f.ready
                     if (f.priority == 0)
                         deleting.remove(f.index)
                     val state = classifyFileState(
@@ -451,7 +442,7 @@ class DownloadsFilesFragment : TSFragment() {
         val total = torrent?.size ?: rows.sumOf { it.size }
         // "completed" counts the selected files only; "downloaded" includes deselected leftovers
         // and can exceed the torrent size, which is where the >100% came from
-        val ready = torrent?.completedBytes ?: rows.filter { it.state == FileState.DOWNLOADED }.sumOf { it.size }
+        val ready = torrent?.completed ?: rows.filter { it.state == FileState.DOWNLOADED }.sumOf { it.size }
         val pct = ((torrent?.progress ?: 1.0) * 100).toInt().coerceIn(0, 100)
         val checking = torrent != null && qbitIsChecking(torrent.state)
         val inProgress = torrent != null && pct < 100 && !checking

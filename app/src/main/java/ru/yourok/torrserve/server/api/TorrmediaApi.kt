@@ -2,6 +2,7 @@ package ru.yourok.torrserve.server.api
 
 import android.net.Uri
 import com.google.gson.Gson
+import com.google.gson.JsonParser
 import com.google.gson.annotations.SerializedName
 import org.jsoup.Connection
 import org.jsoup.Jsoup
@@ -90,8 +91,33 @@ object TorrmediaApi {
         return conn
     }
 
+    const val CONTRACT = 1
+
+    @Volatile
+    private var verifiedBase: String? = null
+
+    private fun ensureContract(base: String) {
+        if (verifiedBase == base) return
+        val resp = connect("$base/health").method(Connection.Method.GET).execute()
+        if (resp.statusCode() !in 200..299)
+            throw TorrmediaException("health: HTTP ${resp.statusCode()}", resp.statusCode())
+        val contract = runCatching {
+            JsonParser.parseString(resp.body()).asJsonObject.get("contract").asInt
+        }.getOrElse {
+            throw TorrmediaException("torrmedia did not report its contract version", resp.statusCode())
+        }
+        if (contract != CONTRACT)
+            throw TorrmediaException(
+                "torrmedia speaks contract $contract, this build expects $CONTRACT — update both",
+                resp.statusCode()
+            )
+        verifiedBase = base
+    }
+
     private fun getBody(op: String, path: String): String {
-        val resp = connect("${base()}$path")
+        val base = base()
+        ensureContract(base)
+        val resp = connect("$base$path")
             .method(Connection.Method.GET)
             .execute()
         if (resp.statusCode() !in 200..299) {
@@ -105,14 +131,18 @@ object TorrmediaApi {
     }
 
     private fun post(op: String, path: String): List<String> {
-        val resp = connect("${base()}$path", operationTimeout)
+        val base = base()
+        ensureContract(base)
+        val resp = connect("$base$path", operationTimeout)
             .method(Connection.Method.POST)
             .execute()
         return checkResult(op, resp)
     }
 
     fun list(): TorrmediaList {
-        val resp = connect("${base()}/list")
+        val base = base()
+        ensureContract(base)
+        val resp = connect("$base/list")
             .method(Connection.Method.GET)
             .execute()
         if (resp.statusCode() !in 200..299)

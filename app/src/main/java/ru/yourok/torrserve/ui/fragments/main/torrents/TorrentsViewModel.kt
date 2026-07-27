@@ -103,7 +103,7 @@ class TorrentsViewModel : ViewModel() {
                     // the shelf row shows live download state instead of a second row for the torrent
                     ui.stat_string = t.state
                     ui.torrent_size = t.size
-                    ui.loaded_size = t.completedBytes
+                    ui.loaded_size = t.completed
                     ui.qbitMagnet = t.magnetUri
                 }
                 applyWatchSummary(ui, item.path, item.files.map { it.path }, live?.let { qbitFileTotals[it.hash] } ?: 0)

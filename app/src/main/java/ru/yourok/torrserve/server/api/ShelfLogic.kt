@@ -42,7 +42,7 @@ fun snapshotStillValid(snapshot: FileOpSnapshot, current: FileOpSnapshot?): Bool
 }
 
 data class TorrmediaResult(
-    val ok: Boolean = true,
+    val ok: Boolean = false,
     val error: String = "",
     val warnings: List<String> = emptyList(),
 )
@@ -50,14 +50,17 @@ data class TorrmediaResult(
 fun parseTorrmediaResult(body: String): TorrmediaResult {
     val trimmed = body.trim()
     if (trimmed.isEmpty() || !trimmed.startsWith("{"))
-        return TorrmediaResult()
+        return TorrmediaResult(ok = false, error = "empty response body")
     val obj: JsonObject = try {
-        JsonParser.parseString(trimmed) as? JsonObject ?: return TorrmediaResult()
+        JsonParser.parseString(trimmed) as? JsonObject
+            ?: return TorrmediaResult(ok = false, error = "response is not a JSON object")
     } catch (e: Exception) {
-        return TorrmediaResult()
+        return TorrmediaResult(ok = false, error = "malformed response: ${e.message ?: "bad JSON"}")
     }
     val okEl = obj.get("ok")
-    val ok = if (okEl == null || okEl.isJsonNull) true else runCatching { okEl.asBoolean }.getOrDefault(true)
+    if (okEl == null || okEl.isJsonNull)
+        return TorrmediaResult(ok = false, error = "response has no ok field")
+    val ok = runCatching { okEl.asBoolean }.getOrDefault(false)
     val error = obj.get("error")?.takeIf { !it.isJsonNull }?.let { runCatching { it.asString }.getOrDefault("") } ?: ""
     val warnings = obj.get("warnings")?.takeIf { it.isJsonArray }?.asJsonArray
         ?.mapNotNull { w -> runCatching { w.asString }.getOrNull() }

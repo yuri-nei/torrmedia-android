@@ -111,27 +111,19 @@ class DownloadsLogicTest {
     }
 
     @Test
-    fun readyFallsBackToQbitProgressWhenShelfEntryIsNotIdentified() {
-        assertTrue(fileReady(null, null, null, expectedSize = 100, qbitProgress = 1.0))
-        assertFalse(fileReady(null, null, null, expectedSize = 100, qbitProgress = 0.5))
-        assertFalse(fileReady(serverReady = null, exactShelfSize = 0, fallbackShelfSize = 100, expectedSize = 100, qbitProgress = 1.0))
-        assertTrue(fileReady(serverReady = null, exactShelfSize = 100, fallbackShelfSize = null, expectedSize = 100, qbitProgress = 0.0))
-    }
-
-    @Test
-    fun readyFileIsNeverClassifiedAsInProgress() {
-        val ready = fileReady(null, null, null, expectedSize = 100, qbitProgress = 1.0)
-        val state = classifyFileState(
-            dataValid = true, ready = ready, skipped = false,
-            deleting = false, enabling = false,
+    fun serverReadyDrivesTheFileState() {
+        assertEquals(
+            FileState.DOWNLOADED,
+            classifyFileState(dataValid = true, ready = true, skipped = false, deleting = false, enabling = false),
         )
-        assertEquals(FileState.DOWNLOADED, state)
-    }
-
-    @Test
-    fun serverReadyWinsButOnlyWhenPresent() {
-        assertTrue(fileReady(serverReady = true, exactShelfSize = 0, fallbackShelfSize = null, expectedSize = 100, qbitProgress = 0.0))
-        assertFalse(fileReady(serverReady = false, exactShelfSize = 100, fallbackShelfSize = null, expectedSize = 100, qbitProgress = 1.0))
-        assertTrue(fileReady(serverReady = null, exactShelfSize = null, fallbackShelfSize = null, expectedSize = 100, qbitProgress = 1.0))
+        assertEquals(
+            FileState.PROGRESS,
+            classifyFileState(dataValid = true, ready = false, skipped = false, deleting = false, enabling = false),
+        )
+        assertEquals(
+            FileState.UNKNOWN,
+            classifyFileState(dataValid = false, ready = true, skipped = false, deleting = false, enabling = false),
+        )
+        assertFalse(destructiveAllowed(FileState.UNKNOWN, dataValid = false, identified = true))
     }
 }

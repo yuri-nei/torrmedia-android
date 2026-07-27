@@ -96,10 +96,13 @@ class ShelfLogicTest {
     }
 
     @Test
-    fun `empty or non json body counts as success`() {
-        assertTrue(parseTorrmediaResult("").ok)
-        assertTrue(parseTorrmediaResult("OK").ok)
-        assertTrue(parseTorrmediaResult("{}").ok)
+    fun `response without ok is a failure, not an optimistic success`() {
+        assertFalse(parseTorrmediaResult("").ok)
+        assertFalse(parseTorrmediaResult("OK").ok)
+        assertFalse(parseTorrmediaResult("{}").ok)
+        assertTrue(parseTorrmediaResult("""{"ok":true}""").ok)
+        assertFalse(parseTorrmediaResult("""{"ok":false,"error":"boom"}""").ok)
+        assertEquals("boom", parseTorrmediaResult("""{"ok":false,"error":"boom"}""").error)
     }
 
 
@@ -108,7 +111,11 @@ class ShelfLogicTest {
           {"hash":"AE7D01","name":"Release","state":"stoppedUP","progress":1.0,
            "category":"Shows","save_path":"/var/media/library/shows","content_path":"/x",
            "size":31069126553,"amount_left":0,"force_start":false,
-           "item_path":"shows/Release"}]}
+           "item_path":"shows/Release","completed":31069126553,
+           "magnet_uri":"magnet:?xt=urn:btih:AE7D01&tr=http://tracker/announce",
+           "dlspeed":0,"upspeed":0,"eta":8640000,"ratio":1.5,
+           "num_seeds":1,"num_complete":2,"num_leechs":0,"num_incomplete":0,
+           "added_on":1700000000,"completion_on":1700000001}]}
     """.trimIndent()
 
     @Test
@@ -127,11 +134,10 @@ class ShelfLogicTest {
     }
 
     @Test
-    fun `completed bytes fall back to size and progress`() {
+    fun `header stats and magnet come straight from the contract`() {
         val t = parseTorrentList(torrentsBody)[0]
-        assertEquals(31069126553L, t.completedBytes)
-        assertEquals(50L, QbitTorrent(size = 100, progress = 0.5).completedBytes)
-        assertEquals(7L, QbitTorrent(size = 100, progress = 0.5, completed = 7).completedBytes)
+        assertEquals(31069126553L, t.completed)
+        assertTrue(t.magnetUri.startsWith("magnet:?"))
     }
 
     @Test
@@ -213,13 +219,4 @@ class ShelfLogicTest {
         assertTrue("expected an exception", e != null)
     }
 
-    @Test
-    fun `missing ready stays null instead of false`() {
-        val json = """{"ok":true,"hash":"aabb","name":"R","state":"stoppedUP","progress":1.0,
-                       "category":"Shows","item_path":"shows/R","force_start":false,
-                       "files":[{"id":0,"name":"e01.mkv","path":"shows/R/e01.mkv",
-                                 "size":123,"priority":1,"progress":1.0}]}"""
-        val detail = parseTorrentDetail(json)
-        assertEquals(null, detail.files[0].ready)
-    }
 }

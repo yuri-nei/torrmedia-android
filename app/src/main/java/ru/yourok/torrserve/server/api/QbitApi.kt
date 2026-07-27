@@ -34,8 +34,6 @@ data class QbitTorrent(
     @SerializedName("num_leechs") val numLeechs: Int = 0,
     @SerializedName("num_incomplete") val numIncomplete: Int = 0,
 ) {
-    val completedBytes: Long
-        get() = if (completed > 0) completed else (size * progress).toLong()
 }
 
 data class QbitFile(
@@ -45,7 +43,7 @@ data class QbitFile(
     val progress: Double = 0.0,
     val size: Long = 0,
     val priority: Int = 1,
-    val ready: Boolean? = null,
+    val ready: Boolean = false,
 )
 
 object QbitApi {
