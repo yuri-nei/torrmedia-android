@@ -13,6 +13,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.yourok.torrserve.R
@@ -34,6 +35,7 @@ class TorrentsFragment : TSFragment() {
     private var sortMode: Boolean = Settings.sortTorrByTitle
 
     private var mediaJob: Job? = null
+    private var stateJob: Job? = null
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -135,12 +137,19 @@ class TorrentsFragment : TSFragment() {
         model.setUpdate(true)
         mediaJob?.cancel()
         mediaJob = viewLifecycleOwner.lifecycleScope.launch {
-            model.mediaState.collect { state ->
-                emptyView.text = when (state) {
-                    is MediaState.Loading -> getString(R.string.torrmedia_loading)
-                    is MediaState.Failed -> state.message
-                    is MediaState.Ready -> getString(R.string.no_torrents)
+            model.mediaState.combine(model.mediaConnected) { state, connected ->
+                when {
+                    state is MediaState.Loading -> getString(R.string.torrmedia_loading)
+                    state is MediaState.Failed -> state.message
+                    !connected -> getString(R.string.torrmedia_disconnected)
+                    else -> getString(R.string.no_torrents)
                 }
+            }.collect { emptyView.text = it }
+        }
+        stateJob?.cancel()
+        stateJob = viewLifecycleOwner.lifecycleScope.launch {
+            model.mediaConnected.collect { connected ->
+                torrentAdapter?.setMediaStale(!connected)
             }
         }
         data.observe(this@TorrentsFragment) {

@@ -23,7 +23,7 @@ fun itemStatusLabel(status: ItemStatus): String = App.context.getString(
 fun fileStatusLabel(status: FileStatus): String = App.context.getString(
     when (status) {
         FileStatus.READY -> R.string.torrmedia_file_ready
-        FileStatus.DOWNLOADING -> R.string.torrmedia_file_downloading
+        FileStatus.PARTIAL -> R.string.torrmedia_file_downloading
         FileStatus.SKIPPED -> R.string.torrmedia_file_skipped
         FileStatus.MISSING -> R.string.torrmedia_file_missing
         FileStatus.UNKNOWN -> R.string.torrmedia_status_unknown

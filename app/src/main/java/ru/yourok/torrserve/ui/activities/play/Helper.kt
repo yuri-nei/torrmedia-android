@@ -14,6 +14,8 @@ import ru.yourok.torrserve.R
 import ru.yourok.torrserve.app.App
 import ru.yourok.torrserve.server.api.Api
 import ru.yourok.torrserve.server.api.TorrmediaApi
+import ru.yourok.torrserve.server.api.OperationState
+import ru.yourok.torrserve.server.api.Operation
 import ru.yourok.torrserve.server.api.isMagnetLink
 import ru.yourok.torrserve.server.models.torrent.Torrent
 import java.util.Locale
@@ -121,13 +123,36 @@ private fun PlayActivity.qbitSendAndExit(category: String) {
         try {
             if (!isMagnetLink(torrentLink))
                 throw IllegalArgumentException(App.context.getString(R.string.qbit_only_magnet))
-            TorrmediaApi.addItem(torrentLink.trim(), category)
-            App.toast(R.string.qbit_sent)
+            val op = TorrmediaApi.addItem(torrentLink.trim(), category)
+            val outcome = awaitOperation(op)
+            when (outcome.state) {
+                OperationState.FAILED -> App.toast(
+                    App.context.getString(R.string.qbit_send_error) +
+                        (outcome.error?.let { ": $it" } ?: ""), true
+                )
+
+                else -> App.toast(R.string.qbit_sent)
+            }
         } catch (e: Exception) {
             App.toast(App.context.getString(R.string.qbit_send_error) + ": " + (e.message ?: ""), true)
         }
         withContext(Dispatchers.Main) { finish() }
     }
+}
+
+private suspend fun awaitOperation(op: Operation): Operation {
+    if (op.id.isEmpty())
+        return op
+    var current = op
+    repeat(20) {
+        if (current.state == OperationState.DONE || current.state == OperationState.FAILED ||
+            current.state == OperationState.CANCELLED
+        )
+            return current
+        delay(250)
+        current = runCatching { TorrmediaApi.operation(op.id) }.getOrNull() ?: return current
+    }
+    return current
 }
 
 fun addTorrent(torrentHash: String, torrentLink: String, torrentTitle: String, torrentPoster: String, torrentCategory: String, torrentData: String, torrentSave: Boolean): Torrent? {

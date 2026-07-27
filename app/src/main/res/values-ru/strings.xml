@@ -310,4 +310,5 @@
     <string name="qbit_added">Добавлен</string>
     <string name="qbit_categories_error">Не удалось получить список категорий</string>
     <string name="qbit_send_confirm">Отправить эту ссылку в qBittorrent?</string>
+    <string name="torrmedia_item_gone">Раздача исчезла</string>
 </resources>

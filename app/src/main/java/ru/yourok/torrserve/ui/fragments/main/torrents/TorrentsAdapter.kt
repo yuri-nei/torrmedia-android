@@ -29,6 +29,17 @@ import java.util.Locale
 class TorrentsAdapter(private val activity: FragmentActivity) : BaseAdapter() {
     val list = mutableListOf<Torrent>()
 
+    private var mediaStale = false
+
+    fun setMediaStale(stale: Boolean) {
+        if (mediaStale == stale)
+            return
+        mediaStale = stale
+        notifyDataSetChanged()
+    }
+
+    fun isStale(torrent: Torrent): Boolean = mediaStale && torrent.src == "torrmedia"
+
     fun update(list: List<Torrent>) {
         if (this.list.size != list.size) {
             this.list.clear()

@@ -23,6 +23,7 @@ import androidx.appcompat.app.AlertDialog
 import ru.yourok.torrserve.server.api.Api
 import ru.yourok.torrserve.server.api.ItemAction
 import ru.yourok.torrserve.server.api.TorrmediaApi
+import ru.yourok.torrserve.server.api.OperationState
 import ru.yourok.torrserve.server.models.torrent.Torrent
 import ru.yourok.torrserve.ui.activities.play.PlayActivity
 import ru.yourok.torrserve.utils.TorrentHelper
@@ -193,9 +194,28 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
                 App.toast(App.context.getString(R.string.torrmedia_action_unavailable), true)
                 return
             }
-            TorrmediaApi.removeItem(torr.hash, withData)
+            val op = TorrmediaApi.removeItem(torr.hash, withData)
+            if (op.id.isNotEmpty())
+                reportOperationOutcome(op.id)
         } catch (e: Exception) {
             App.toast(App.context.getString(R.string.qbit_send_error) + ": " + (e.message ?: ""), true)
+        }
+    }
+
+    private fun reportOperationOutcome(id: String) {
+        thread {
+            val op = runCatching { TorrmediaApi.operation(id) }.getOrNull() ?: return@thread
+            when (op.state) {
+                OperationState.FAILED -> App.toast(
+                    App.context.getString(R.string.torrmedia_op_failed) +
+                        (op.error?.let { ": $it" } ?: ""), true
+                )
+
+                OperationState.DONE -> for (warning in op.warnings)
+                    App.toast(warning, true)
+
+                else -> {}
+            }
         }
     }
 

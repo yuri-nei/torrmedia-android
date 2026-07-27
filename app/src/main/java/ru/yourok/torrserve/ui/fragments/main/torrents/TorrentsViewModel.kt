@@ -27,6 +27,8 @@ class TorrentsViewModel : ViewModel() {
 
     val mediaState: StateFlow<MediaState<ItemsSnapshot>> get() = store.state
 
+    val mediaConnected: StateFlow<Boolean> get() = store.connected
+
     var data: MutableLiveData<List<Torrent>>? = null
     private var isUpdate = true
 
@@ -67,8 +69,11 @@ class TorrentsViewModel : ViewModel() {
             }
         }
         viewModelScope.launch(Dispatchers.IO) {
-            combine(local, store.state) { locals, media ->
-                val remote = (media as? MediaState.Ready)?.data?.items?.map { it.toUiTorrent() } ?: emptyList()
+            combine(local, store.state, store.connected) { locals, media, connected ->
+                val remote = (media as? MediaState.Ready)?.data?.items
+                    ?.map { it.toUiTorrent() }
+                    ?.map { if (connected) it else it.copy(torrmediaActions = emptySet()) }
+                    ?: emptyList()
                 (locals + remote).sortedByDescending { it.timestamp }
             }.collect { list ->
                 withContext(Dispatchers.Main) { data?.value = list }

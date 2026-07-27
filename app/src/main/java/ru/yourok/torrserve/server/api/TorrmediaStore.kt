@@ -23,6 +23,8 @@ sealed class MediaState<out T> {
     object Loading : MediaState<Nothing>()
     data class Ready<T>(val data: T) : MediaState<T>()
 
+    object Removed : MediaState<Nothing>()
+
     data class Failed(val message: String, val fatal: Boolean) : MediaState<Nothing>()
 }
 
@@ -42,20 +44,36 @@ class TorrmediaStore<T> private constructor(
     val connected: StateFlow<Boolean> = _connected
 
     private val attempt = AtomicInteger(0)
-    private val stream = AtomicReference<TorrmediaHttp.Stream?>(null)
+
+    private val generation = AtomicInteger(0)
+    private val stream = AtomicReference<Pair<Int, TorrmediaHttp.Stream>?>(null)
     private var job: Job? = null
 
     fun start(scope: CoroutineScope) {
         if (job?.isActive == true)
             return
+        generation.incrementAndGet()
         job = scope.launch(Dispatchers.IO) { loop() }
     }
 
     fun stop() {
+        generation.incrementAndGet()
         job?.cancel()
         job = null
-        stream.getAndSet(null)?.let { runCatching { it.close() } }
+        closeStream(null)
         _connected.value = false
+    }
+
+    private fun closeStream(only: Int?) {
+        while (true) {
+            val current = stream.get() ?: return
+            if (only != null && current.first != only)
+                return
+            if (stream.compareAndSet(current, null)) {
+                runCatching { current.second.close() }
+                return
+            }
+        }
     }
 
     private suspend fun loop() {
@@ -84,16 +102,19 @@ class TorrmediaStore<T> private constructor(
     }
 
     private suspend fun consume() = suspendCancellableCoroutine<Unit> { cont ->
-        cont.invokeOnCancellation { stream.getAndSet(null)?.let { runCatching { it.close() } } }
+        val mine = generation.get()
+        cont.invokeOnCancellation { closeStream(mine) }
         val worker = Thread({
             var opened: TorrmediaHttp.Stream? = null
             try {
                 opened = TorrmediaApi.openStream(path())
-                stream.set(opened)
-                if (!cont.isActive) {
+                if (!cont.isActive || generation.get() != mine) {
                     opened.close()
+                    if (cont.isActive)
+                        cont.resume(Unit)
                     return@Thread
                 }
+                stream.set(mine to opened)
                 opened.read { event -> onEvent(event) }
                 if (cont.isActive)
                     cont.resume(Unit)
@@ -102,7 +123,7 @@ class TorrmediaStore<T> private constructor(
                     cont.resumeWithException(e)
             } finally {
                 opened?.let { runCatching { it.close() } }
-                stream.compareAndSet(opened, null)
+                closeStream(mine)
             }
         }, "torrmedia-sse")
         worker.isDaemon = true
@@ -112,10 +133,18 @@ class TorrmediaStore<T> private constructor(
     private fun onEvent(event: SseEvent) {
         when (event.name) {
             "state" -> {
-                val snapshot = runCatching { parse(event.data) }.getOrNull() ?: return
-                _state.value = MediaState.Ready(snapshot)
                 _connected.value = true
                 attempt.set(0)
+                if (event.data.trim() == "null") {
+                    _state.value = MediaState.Removed
+                    return
+                }
+                val snapshot = runCatching { parse(event.data) }.getOrNull()
+                if (snapshot == null) {
+                    _state.value = MediaState.Failed("bad state payload", fatal = false)
+                    return
+                }
+                _state.value = MediaState.Ready(snapshot)
             }
 
             "operation" -> runCatching { parseOperation(event.data) }.getOrNull()

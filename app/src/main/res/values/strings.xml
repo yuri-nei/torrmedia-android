@@ -371,4 +371,5 @@
     <string name="qbit_added">Added</string>
     <string name="qbit_categories_error">Could not read the category list</string>
     <string name="qbit_send_confirm">Send this link to qBittorrent?</string>
+    <string name="torrmedia_item_gone">Release is gone</string>
 </resources>

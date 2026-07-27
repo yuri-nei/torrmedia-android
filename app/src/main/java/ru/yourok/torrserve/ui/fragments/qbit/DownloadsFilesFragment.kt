@@ -118,8 +118,11 @@ class DownloadsFilesFragment : TSFragment() {
         }
         viewLifecycleOwner.lifecycleScope.launch {
             store.connected.collect { live ->
+                val restored = offline && live
                 offline = !live
                 render(store.state.value)
+                if (restored)
+                    reconcilePending()
             }
         }
     }
@@ -148,6 +151,15 @@ class DownloadsFilesFragment : TSFragment() {
                 filesAdapter.update(emptyList())
                 showStatus(state.message)
                 hideControls(vi)
+            }
+
+            is MediaState.Removed -> {
+                filesAdapter.update(emptyList())
+                hideControls(vi)
+                if (isAdded) {
+                    App.toast(R.string.torrmedia_item_gone)
+                    parentFragmentManager.popBackStack()
+                }
             }
 
             is MediaState.Ready -> renderItem(vi, state.data)
@@ -376,8 +388,8 @@ class DownloadsFilesFragment : TSFragment() {
                         phase = operationPhaseLabel(op.phase)
                     }
                 }
-                if (op.state == OperationState.DONE || op.state == OperationState.FAILED)
-                    withContext(Dispatchers.Main) { onOperation(op) }
+                if (op.id.isNotEmpty())
+                    reconcile(op.id)
             } catch (e: Exception) {
                 App.toast(App.context.getString(R.string.qbit_send_error) + ": " + (e.message ?: ""), true)
                 withContext(Dispatchers.Main) { syncProgress() }
@@ -393,6 +405,18 @@ class DownloadsFilesFragment : TSFragment() {
                 App.toast(App.context.getString(R.string.qbit_send_error) + ": " + (e.message ?: ""), true)
             }
         }
+    }
+
+    private fun reconcile(id: String) {
+        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+            val op = runCatching { TorrmediaApi.operation(id) }.getOrNull() ?: return@launch
+            withContext(Dispatchers.Main) { onOperation(op) }
+        }
+    }
+
+    private fun reconcilePending() {
+        for (id in pending.keys.toList())
+            reconcile(id)
     }
 
     private fun onOperation(op: Operation) {
@@ -411,6 +435,12 @@ class DownloadsFilesFragment : TSFragment() {
                 syncProgress()
                 if (kind == OpKind.REMOVE && isAdded)
                     parentFragmentManager.popBackStack()
+            }
+
+            OperationState.CANCELLED -> {
+                pending.remove(op.id)
+                phase = ""
+                render(store.state.value)
             }
 
             OperationState.FAILED -> {
@@ -525,7 +555,7 @@ class DownloadsFilesFragment : TSFragment() {
                         size + resume
                     }
 
-                    FileStatus.DOWNLOADING -> "$size ● ${(row.progress * 100).toInt()}%"
+                    FileStatus.PARTIAL -> "$size ● ${(row.progress * 100).toInt()}%"
                     else -> "$size ● ${fileStatusLabel(row.status)}"
                 }
                 val shapeDrawable = MaterialShapeDrawable(shapeAppearanceModel)

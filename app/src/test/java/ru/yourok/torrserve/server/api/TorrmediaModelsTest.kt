@@ -244,4 +244,42 @@ class TorrmediaModelsTest {
         assertFalse(isMagnetLink("https://tracker.example/torrent.torrent"))
         assertFalse(isMagnetLink(""))
     }
+
+    @Test
+    fun `partial file status is understood`() {
+        val json = """{"id":"a","title":"R","status":"stopped","progress":0.5,"size":10,
+                       "downloaded":5,"files_total":1,"files_ready":0,"files_watched":0,
+                       "category":null,"magnet":null,"added_at":0,
+                       "transfer":{"down":0,"up":0,"eta":null,"ratio":0,"seeds":0,"peers":0},
+                       "actions":[],
+                       "files":[{"id":"f","name":"e01.mkv","path":"e01.mkv","size":10,
+                                 "progress":0.5,"status":"partial","watch":null,
+                                 "position":0,"actions":[]}]}"""
+        val item = parseItem(json)
+        assertEquals(FileStatus.PARTIAL, item.files!![0].status)
+    }
+
+    @Test
+    fun `unknown file status does not break parsing`() {
+        val json = """{"id":"a","title":"R","status":"stopped","progress":1.0,"size":1,
+                       "downloaded":1,"files_total":1,"files_ready":1,"files_watched":0,
+                       "category":null,"magnet":null,"added_at":0,
+                       "transfer":{"down":0,"up":0,"eta":null,"ratio":0,"seeds":0,"peers":0},
+                       "actions":[],
+                       "files":[{"id":"f","name":"e.mkv","path":"e.mkv","size":1,
+                                 "progress":1.0,"status":"something-new","watch":null,
+                                 "position":0,"actions":["play","warp_drive"]}]}"""
+        val file = parseItem(json).files!![0]
+        assertEquals(FileStatus.UNKNOWN, file.status)
+        assertEquals(setOf(FileAction.PLAY), file.actions)
+    }
+
+    @Test
+    fun `cancelled operation state is understood`() {
+        val op = parseOperation("""{"id":"op_1","kind":"file.delete","item":"i","file":null,
+                                    "state":"cancelled","phase":null,"started_at":0,
+                                    "finished_at":1,"error":null,"warnings":[],"result":null}""")
+        assertEquals(OperationState.CANCELLED, op.state)
+        assertEquals(null, op.error)
+    }
 }

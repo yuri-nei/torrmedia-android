@@ -9,12 +9,12 @@ import java.util.Locale
 
 enum class ItemStatus { DOWNLOADING, SEEDING, STOPPED, CHECKING, ERROR, SHELF, UNKNOWN }
 
-enum class FileStatus { READY, DOWNLOADING, SKIPPED, MISSING, UNKNOWN }
+enum class FileStatus { READY, PARTIAL, SKIPPED, MISSING, UNKNOWN }
 
 /// watch: null | "started" | "watched"
 enum class WatchState { NONE, STARTED, WATCHED }
 
-enum class OperationState { QUEUED, RUNNING, DONE, FAILED, UNKNOWN }
+enum class OperationState { QUEUED, RUNNING, DONE, FAILED, CANCELLED, UNKNOWN }
 
 enum class ItemAction { START, STOP, RECHECK, REMOVE, REMOVE_WITH_DATA }
 
