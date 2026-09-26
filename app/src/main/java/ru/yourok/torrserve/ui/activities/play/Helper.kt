@@ -3,21 +3,17 @@ package ru.yourok.torrserve.ui.activities.play
 import android.content.ContentResolver
 import android.content.Intent
 import android.net.Uri
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import ru.yourok.torrserve.R
 import ru.yourok.torrserve.app.App
 import ru.yourok.torrserve.server.api.Api
-import ru.yourok.torrserve.server.api.TorrmediaApi
-import ru.yourok.torrserve.server.api.OperationState
-import ru.yourok.torrserve.server.api.Operation
 import ru.yourok.torrserve.server.api.isMagnetLink
 import ru.yourok.torrserve.server.models.torrent.Torrent
+import ru.yourok.torrserve.ui.fragments.qbit.AddTorrentFragment
 import java.util.Locale
 
 fun PlayActivity.readArgs() {
@@ -77,80 +73,16 @@ fun PlayActivity.addAndExit() {
     finish()
 }
 
-/// torrmedia: pick a category, push the magnet to torrmedia and close (no player)
 fun PlayActivity.qbitAndExit() {
-    lifecycleScope.launch(Dispatchers.IO) {
-        showProgress()
-        val categories = try {
-            TorrmediaApi.categories()
-        } catch (e: Exception) {
-            hideProgress()
-            App.toast(App.context.getString(R.string.qbit_categories_error) + ": " + (e.message ?: ""), true)
-            withContext(Dispatchers.Main) { finish() }
-            return@launch
-        }
-        hideProgress()
-        withContext(Dispatchers.Main) {
-            AlertDialog.Builder(this@qbitAndExit)
-                .setTitle(R.string.qbit_send_confirm)
-                .setMessage(torrentLink)
-                .setPositiveButton(android.R.string.ok) { _, _ -> chooseCategoryAndExit(categories) }
-                .setNegativeButton(android.R.string.cancel) { _, _ -> finish() }
-                .setOnCancelListener { finish() }
-                .show()
-        }
-    }
-}
-
-private fun PlayActivity.chooseCategoryAndExit(categories: List<String>) {
-    if (categories.isEmpty()) {
-        qbitSendAndExit("")
+    if (!isMagnetLink(torrentLink)) {
+        App.toast(R.string.qbit_only_magnet, true)
+        finish()
         return
     }
-    var checked = 0
-    AlertDialog.Builder(this)
-        .setTitle(R.string.qbit_select_category)
-        .setSingleChoiceItems(categories.toTypedArray(), checked) { _, which -> checked = which }
-        .setPositiveButton(android.R.string.ok) { _, _ -> qbitSendAndExit(categories[checked]) }
-        .setNegativeButton(android.R.string.cancel) { _, _ -> finish() }
-        .setOnCancelListener { finish() }
-        .show()
-}
-
-private fun PlayActivity.qbitSendAndExit(category: String) {
-    lifecycleScope.launch(Dispatchers.IO) {
-        showProgress()
-        try {
-            if (!isMagnetLink(torrentLink))
-                throw IllegalArgumentException(App.context.getString(R.string.qbit_only_magnet))
-            val op = TorrmediaApi.addItem(torrentLink.trim(), category)
-            val outcome = awaitOperation(op)
-            when (outcome.state) {
-                OperationState.FAILED -> App.toast(
-                    App.context.getString(R.string.qbit_send_error) +
-                        (outcome.error?.let { ": $it" } ?: ""), true
-                )
-
-                else -> App.toast(R.string.qbit_sent)
-            }
-        } catch (e: Exception) {
-            App.toast(App.context.getString(R.string.qbit_send_error) + ": " + (e.message ?: ""), true)
-        }
-        withContext(Dispatchers.Main) { finish() }
+    AddTorrentFragment.newInstance(torrentLink.trim()).apply {
+        onDone = { finish() }
+        show(this@qbitAndExit, R.id.bottom_container)
     }
-}
-
-private suspend fun awaitOperation(op: Operation): Operation {
-    if (op.id.isEmpty())
-        return op
-    var current = op
-    repeat(20) {
-        if (current.state == OperationState.DONE || current.state == OperationState.FAILED)
-            return current
-        delay(250)
-        current = runCatching { TorrmediaApi.operation(op.id) }.getOrNull() ?: return current
-    }
-    return current
 }
 
 fun addTorrent(torrentHash: String, torrentLink: String, torrentTitle: String, torrentPoster: String, torrentCategory: String, torrentData: String, torrentSave: Boolean): Torrent? {

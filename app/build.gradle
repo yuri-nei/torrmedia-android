@@ -61,7 +61,7 @@ android {
 }
 
 base {
-    archivesName = "torrmedia-android-" + android.defaultConfig.versionName
+    archivesName = "torrmedia-android-" + android.defaultConfig.versionName + "-" + new Date().format("yyyyMMdd-HHmm")
 }
 
 dependencies {

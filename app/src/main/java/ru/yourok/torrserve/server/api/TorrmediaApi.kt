@@ -1,12 +1,13 @@
 package ru.yourok.torrserve.server.api
 
 import android.net.Uri
+import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import ru.yourok.torrserve.settings.Settings
 
 object TorrmediaApi {
 
-    const val CONTRACT = 2
+    const val CONTRACT = 1
 
     private fun base(): String {
         val url = Settings.getTorrmediaUrl()
@@ -53,6 +54,31 @@ object TorrmediaApi {
 
     fun categories(): List<String> = parseCategories(call("GET", "/categories"))
 
+    fun storage(): Storage = parseStorage(call("GET", "/storage"))
+
+
+    fun createDraft(magnet: String, category: String): Draft {
+        val body = JsonObject()
+        body.addProperty("magnet", magnet)
+        if (category.isNotEmpty())
+            body.addProperty("category", category)
+        return parseDraft(call("POST", "/drafts", body.toString()))
+    }
+
+    fun draft(id: String): Draft = parseDraft(call("GET", "/drafts/${seg(id)}"))
+
+    fun confirmDraft(id: String, files: List<String>, category: String): Draft {
+        val body = JsonObject()
+        val array = JsonArray()
+        files.forEach { array.add(seg(it)) }
+        body.add("files", array)
+        if (category.isNotEmpty())
+            body.addProperty("category", category)
+        return parseDraft(call("POST", "/drafts/${seg(id)}/confirm", body.toString()))
+    }
+
+    fun discardDraft(id: String): Draft = parseDraft(call("DELETE", "/drafts/${seg(id)}"))
+
 
     fun addItem(magnet: String, category: String): Operation {
         val body = JsonObject()
@@ -73,6 +99,9 @@ object TorrmediaApi {
 
     fun deleteFile(item: String, file: String): Operation =
         operationCall("DELETE", "/items/${seg(item)}/files/${seg(file)}")
+
+    fun deleteWatched(item: String): Operation =
+        operationCall("DELETE", "/items/${seg(item)}/files?watched=true")
 
     fun enableFile(item: String, file: String): Operation =
         operationCall("POST", "/items/${seg(item)}/files/${seg(file)}/enable")
@@ -107,4 +136,6 @@ object TorrmediaApi {
     internal const val LIST_EVENTS = "/events"
 
     internal fun itemEvents(item: String): String = "/items/${seg(item)}/events"
+
+    internal fun draftEvents(draft: String): String = "/drafts/${seg(draft)}/events"
 }

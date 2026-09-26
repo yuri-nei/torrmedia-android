@@ -25,7 +25,11 @@ sealed class MediaState<out T> {
 
     object Removed : MediaState<Nothing>()
 
-    data class Failed(val message: String, val fatal: Boolean) : MediaState<Nothing>()
+    data class Failed(
+        val message: String,
+        val fatal: Boolean,
+        val code: TorrmediaErrorCode? = null,
+    ) : MediaState<Nothing>()
 }
 
 class TorrmediaStore<T> private constructor(
@@ -92,7 +96,7 @@ class TorrmediaStore<T> private constructor(
                     return
                 }
                 if (_state.value !is MediaState.Ready<*>)
-                    _state.value = MediaState.Failed(e.message ?: e.toString(), fatal = false)
+                    _state.value = MediaState.Failed(e.message ?: e.toString(), fatal = false, code = code)
             }
             _connected.value = false
             val tries = attempt.get()
@@ -180,5 +184,8 @@ class TorrmediaStore<T> private constructor(
 
         fun item(id: String): TorrmediaStore<Item> =
             TorrmediaStore({ TorrmediaApi.itemEvents(id) }, { parseItem(it) })
+
+        fun draft(id: String): TorrmediaStore<Draft> =
+            TorrmediaStore({ TorrmediaApi.draftEvents(id) }, { parseDraft(it) })
     }
 }

@@ -259,8 +259,21 @@
     <string name="switch_disable_accessibility_on_server_switch_summary_off">Сервис специальных возможностей не будет отключён при переключении с локального на удалённый сервер</string>
     <!-- torrmedia -->
     <string name="qbit_download">Скачать (qBittorrent)</string>
-    <string name="qbit_select_category">Категория qBittorrent</string>
-    <string name="qbit_sent">Отправлено в qBittorrent</string>
+    <string name="torrmedia_add_resolving">Читаем торрент…</string>
+    <string name="torrmedia_add_starting">запускаем</string>
+    <string name="torrmedia_add_cancelling">отменяем</string>
+    <string name="torrmedia_add_selected_fmt">Выбрано %1$d из %2$d</string>
+    <string name="torrmedia_add_free_fmt">свободно %1$s из %2$s</string>
+    <string name="torrmedia_add_free_short_fmt">свободно %1$s</string>
+    <string name="torrmedia_add_missing_fmt">не хватает %1$s</string>
+    <string name="torrmedia_add_select_all">Выбрать все</string>
+    <string name="torrmedia_add_select_none">Снять все</string>
+    <string name="torrmedia_add_download">Добавить</string>
+    <string name="torrmedia_add_category">Категория</string>
+    <string name="torrmedia_add_category_none">Без категории</string>
+    <string name="torrmedia_add_overflow_confirm">Выбранное не помещается на сервере: не хватает %1$s. Всё равно скачать?</string>
+    <string name="torrmedia_add_sent">Качается на сервере</string>
+    <string name="torrmedia_add_failed">Не удалось добавить торрент</string>
     <string name="qbit_send_error">Ошибка qBittorrent</string>
     <string name="qbit_only_magnet">Отправить можно только magnet-ссылку</string>
     <string name="torrmedia_url_title">Адрес torrmedia</string>
@@ -282,6 +295,8 @@
     <string name="torrmedia_action_start">Запустить</string>
     <string name="torrmedia_action_stop">Остановить</string>
     <string name="torrmedia_action_recheck">Проверить данные</string>
+    <string name="torrmedia_action_delete_watched">Удалить просмотренные</string>
+    <string name="torrmedia_action_more">Ещё</string>
     <string name="torrmedia_action_remove">Снять раздачу</string>
     <string name="torrmedia_action_remove_with_data">Удалить вместе с файлами</string>
     <string name="torrmedia_action_play">Смотреть</string>
@@ -292,6 +307,7 @@
     <string name="torrmedia_action_unavailable">Сервер сейчас не разрешает это действие</string>
     <string name="torrmedia_remove_confirm">Раздача будет снята, файлы на диске останутся</string>
     <string name="torrmedia_remove_with_data_confirm">Раздача и её файлы на сервере будут удалены</string>
+    <string name="torrmedia_delete_watched_confirm">Будет удалено серий: %1$d. Недосмотренные останутся на сервере</string>
     <string name="torrmedia_phase_waiting">ожидание</string>
     <string name="torrmedia_phase_stopping">останавливаю</string>
     <string name="torrmedia_phase_trimming">освобождаю место</string>
@@ -309,7 +325,5 @@
     <string name="qbit_speed">Скорость</string>
     <string name="qbit_eta">Осталось</string>
     <string name="qbit_added">Добавлен</string>
-    <string name="qbit_categories_error">Не удалось получить список категорий</string>
-    <string name="qbit_send_confirm">Отправить эту ссылку в qBittorrent?</string>
     <string name="torrmedia_item_gone">Раздача исчезла</string>
 </resources>

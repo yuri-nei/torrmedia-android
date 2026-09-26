@@ -42,8 +42,10 @@ import ru.yourok.torrserve.server.api.TorrmediaStore
 import ru.yourok.torrserve.server.api.Operation
 import ru.yourok.torrserve.server.api.OperationState
 import ru.yourok.torrserve.server.api.fileMenuActions
+import ru.yourok.torrserve.server.api.itemMenuActions
 import ru.yourok.torrserve.server.api.primaryTransferAction
 import ru.yourok.torrserve.server.api.removalActions
+import ru.yourok.torrserve.server.api.watchedToDelete
 import ru.yourok.torrserve.server.api.WatchState
 import ru.yourok.torrserve.settings.Settings
 import ru.yourok.torrserve.ui.dialogs.PlayersDialog
@@ -96,8 +98,8 @@ class DownloadsFilesFragment : TSFragment() {
         view.findViewById<Button>(R.id.btnQbitDeleteTorrent)?.let {
             TooltipCompat.setTooltipText(it, getString(R.string.torrmedia_action_remove))
         }
-        view.findViewById<Button>(R.id.btnQbitRecheck)?.let {
-            TooltipCompat.setTooltipText(it, getString(R.string.torrmedia_action_recheck))
+        view.findViewById<Button>(R.id.btnQbitMore)?.let {
+            TooltipCompat.setTooltipText(it, getString(R.string.torrmedia_action_more))
         }
         view.findViewById<ListView>(R.id.lvQbitFiles)?.apply {
             adapter = filesAdapter
@@ -168,9 +170,9 @@ class DownloadsFilesFragment : TSFragment() {
 
     private fun hideControls(vi: View) {
         vi.findViewById<LinearProgressIndicator>(R.id.pbQbitProgress)?.visibility = View.GONE
-        vi.findViewById<View>(R.id.btnQbitPause)?.visibility = View.GONE
-        vi.findViewById<View>(R.id.btnQbitRecheck)?.visibility = View.GONE
+        vi.findViewById<View>(R.id.btnQbitTransfer)?.visibility = View.GONE
         vi.findViewById<View>(R.id.btnQbitDeleteTorrent)?.visibility = View.GONE
+        vi.findViewById<View>(R.id.btnQbitMore)?.visibility = View.GONE
         for (id in intArrayOf(R.id.tvQbitSpeed, R.id.tvQbitSeeds, R.id.tvQbitPeers, R.id.tvQbitEta, R.id.tvQbitCategory, R.id.tvQbitAdded))
             vi.findViewById<View>(id)?.visibility = View.GONE
     }
@@ -251,7 +253,7 @@ class DownloadsFilesFragment : TSFragment() {
         chip(R.id.tvQbitCategory, getString(R.string.torrent_category), item.category?.takeIf { it.isNotBlank() })
         chip(R.id.tvQbitAdded, getString(R.string.qbit_added), item.addedAt.takeIf { it > 0 }?.let { Format.sDateFmt(it) })
 
-        vi.findViewById<MaterialButton>(R.id.btnQbitPause)?.apply {
+        vi.findViewById<MaterialButton>(R.id.btnQbitTransfer)?.apply {
             val action = primaryTransferAction(item.actions)
             if (action == null) {
                 visibility = View.GONE
@@ -268,15 +270,6 @@ class DownloadsFilesFragment : TSFragment() {
                 }
             }
         }
-        vi.findViewById<MaterialButton>(R.id.btnQbitRecheck)?.apply {
-            if (ItemAction.RECHECK in item.actions) {
-                visibility = View.VISIBLE
-                setOnClickListener { runOperation(OpKind.GENERIC) { TorrmediaApi.recheckItem(itemId) } }
-            } else {
-                visibility = View.GONE
-                setOnClickListener(null)
-            }
-        }
         vi.findViewById<MaterialButton>(R.id.btnQbitDeleteTorrent)?.apply {
             val removals = removalActions(item.actions)
             if (removals.isEmpty()) {
@@ -285,6 +278,16 @@ class DownloadsFilesFragment : TSFragment() {
             } else {
                 visibility = View.VISIBLE
                 setOnClickListener { confirmRemove(removals) }
+            }
+        }
+        vi.findViewById<MaterialButton>(R.id.btnQbitMore)?.apply {
+            val menu = itemMenuActions(item.actions)
+            if (menu.isEmpty()) {
+                visibility = View.GONE
+                setOnClickListener(null)
+            } else {
+                visibility = View.VISIBLE
+                setOnClickListener { showItemMenu(menu) }
             }
         }
 
@@ -317,6 +320,34 @@ class DownloadsFilesFragment : TSFragment() {
 
             else -> App.toast(fileStatusLabel(file.status), true)
         }
+    }
+
+    private fun showItemMenu(actions: List<ItemAction>) {
+        val titles = actions.map { itemActionLabel(it) }.toTypedArray()
+        AlertDialog.Builder(requireContext())
+            .setTitle(R.string.torrmedia_action_more)
+            .setItems(titles) { _, which -> runItemAction(actions[which]) }
+            .show()
+    }
+
+    private fun runItemAction(action: ItemAction) {
+        when (action) {
+            ItemAction.RECHECK -> runOperation(OpKind.GENERIC) { TorrmediaApi.recheckItem(itemId) }
+            ItemAction.DELETE_WATCHED -> confirmDeleteWatched()
+            else -> App.toast(R.string.torrmedia_action_unavailable, true)
+        }
+    }
+
+    private fun confirmDeleteWatched() {
+        val files = (store.state.value as? MediaState.Ready)?.data?.files.orEmpty()
+        AlertDialog.Builder(requireContext())
+            .setTitle(R.string.torrmedia_action_delete_watched)
+            .setMessage(getString(R.string.torrmedia_delete_watched_confirm, watchedToDelete(files)))
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                runOperation(OpKind.GENERIC) { TorrmediaApi.deleteWatched(itemId) }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun showFileMenu(file: MediaFile) {

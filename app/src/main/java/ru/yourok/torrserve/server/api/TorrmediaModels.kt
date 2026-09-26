@@ -16,7 +16,9 @@ enum class WatchState { NONE, STARTED, WATCHED }
 
 enum class OperationState { QUEUED, RUNNING, DONE, FAILED, UNKNOWN }
 
-enum class ItemAction { START, STOP, RECHECK, REMOVE, REMOVE_WITH_DATA, CLEAR_VIEWED }
+enum class DraftStatus { RESOLVING, READY, CONFIRMING, CONFIRMED, DISCARDING, DISCARDED, FAILED, UNKNOWN }
+
+enum class ItemAction { START, STOP, RECHECK, DELETE_WATCHED, REMOVE, REMOVE_WITH_DATA, CLEAR_VIEWED }
 
 enum class FileAction { PLAY, DELETE, ENABLE, SET_VIEWED, CLEAR_VIEWED }
 
@@ -70,6 +72,28 @@ data class Item(
 )
 
 data class ItemsSnapshot(val items: List<Item>, val degraded: String?)
+
+data class Storage(val free: Long?, val total: Long?, val reserve: Long)
+
+data class DraftFile(
+    val id: String,
+    val name: String,
+    val path: String,
+    val size: Long,
+    val wanted: Boolean,
+)
+
+data class Draft(
+    val id: String,
+    val status: DraftStatus,
+    val title: String,
+    val size: Long,
+    val category: String?,
+    val item: String?,
+    val error: String?,
+    val files: List<DraftFile>,
+    val storage: Storage,
+)
 
 data class Operation(
     val id: String,
@@ -172,6 +196,43 @@ fun operationOf(o: JsonObject): Operation = Operation(
         ?: emptyList(),
 )
 
+private fun JsonObject.nullableLong(name: String): Long? = longOrNull(name)
+
+fun storageOf(o: JsonObject?): Storage {
+    if (o == null)
+        return Storage(null, null, 0)
+    return Storage(
+        free = o.nullableLong("free"),
+        total = o.nullableLong("total"),
+        reserve = o.long("reserve"),
+    )
+}
+
+fun draftFileOf(o: JsonObject): DraftFile = DraftFile(
+    id = o.str("id") ?: "",
+    name = o.str("name") ?: "",
+    path = o.str("path") ?: "",
+    size = o.long("size"),
+    wanted = o.field("wanted")?.takeIf { it.isJsonPrimitive }
+        ?.let { runCatching { it.asBoolean }.getOrNull() } ?: false,
+)
+
+fun draftOf(o: JsonObject): Draft = Draft(
+    id = o.str("id") ?: "",
+    status = wireEnum(o.str("status"), DraftStatus.values(), DraftStatus.UNKNOWN),
+    title = o.str("title") ?: "",
+    size = o.long("size"),
+    category = o.str("category"),
+    item = o.str("item"),
+    error = o.str("error"),
+    files = o.arr("files")?.mapNotNull { el -> el.obj()?.let { draftFileOf(it) } } ?: emptyList(),
+    storage = storageOf(o.field("storage").obj()),
+)
+
+fun parseDraft(body: String): Draft = draftOf(parseObject(body))
+
+fun parseStorage(body: String): Storage = storageOf(parseObject(body))
+
 fun parseItems(body: String): ItemsSnapshot {
     val o = parseObject(body)
     val items = o.arr("items")?.mapNotNull { el -> el.obj()?.let { itemOf(it) } } ?: emptyList()
@@ -228,6 +289,24 @@ fun primaryTransferAction(actions: Set<ItemAction>): ItemAction? = when {
 fun removalActions(actions: Set<ItemAction>): List<ItemAction> =
     listOf(ItemAction.REMOVE, ItemAction.REMOVE_WITH_DATA).filter { it in actions }
 
+fun itemMenuActions(actions: Set<ItemAction>): List<ItemAction> =
+    listOf(ItemAction.RECHECK, ItemAction.DELETE_WATCHED).filter { it in actions }
+
+fun watchedToDelete(files: List<MediaFile>): Int =
+    files.count { it.watch == WatchState.WATCHED && FileAction.DELETE in it.actions }
+
 fun fileMenuActions(actions: Set<FileAction>): List<FileAction> =
     listOf(FileAction.ENABLE, FileAction.SET_VIEWED, FileAction.CLEAR_VIEWED, FileAction.DELETE)
         .filter { it in actions }
+
+
+fun selectedBytes(files: List<DraftFile>, selected: Set<String>): Long =
+    files.filter { it.id in selected }.sumOf { it.size }
+
+fun missingBytes(files: List<DraftFile>, selected: Set<String>, storage: Storage): Long? {
+    val need = selectedBytes(files, selected)
+    if (need == 0L)
+        return 0
+    val free = storage.free ?: return null
+    return (need + storage.reserve - free).coerceAtLeast(0)
+}

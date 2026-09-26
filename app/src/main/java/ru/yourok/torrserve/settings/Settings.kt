@@ -66,6 +66,9 @@ object Settings {
 
     fun getTorrmediaToken(): String = get("torrmedia_token", "").trim()
 
+    fun getTorrmediaCategory(): String = get("torrmedia_category", "")
+    fun setTorrmediaCategory(v: String) = set("torrmedia_category", v)
+
     private fun withHttpScheme(raw: String): String {
         val url = raw.trim().trimEnd('/')
         if (url.isEmpty() || url.startsWith("http://", true) || url.startsWith("https://", true))

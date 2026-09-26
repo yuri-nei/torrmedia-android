@@ -319,8 +319,21 @@
 
     <!-- torrmedia -->
     <string name="qbit_download">Download (qBittorrent)</string>
-    <string name="qbit_select_category">qBittorrent category</string>
-    <string name="qbit_sent">Sent to qBittorrent</string>
+    <string name="torrmedia_add_resolving">Reading the torrent…</string>
+    <string name="torrmedia_add_starting">starting</string>
+    <string name="torrmedia_add_cancelling">cancelling</string>
+    <string name="torrmedia_add_selected_fmt">Selected %1$d of %2$d</string>
+    <string name="torrmedia_add_free_fmt">free %1$s of %2$s</string>
+    <string name="torrmedia_add_free_short_fmt">free %1$s</string>
+    <string name="torrmedia_add_missing_fmt">%1$s short</string>
+    <string name="torrmedia_add_select_all">Select all</string>
+    <string name="torrmedia_add_select_none">Clear all</string>
+    <string name="torrmedia_add_download">Add</string>
+    <string name="torrmedia_add_category">Category</string>
+    <string name="torrmedia_add_category_none">No category</string>
+    <string name="torrmedia_add_overflow_confirm">The selection does not fit on the server: %1$s short. Download anyway?</string>
+    <string name="torrmedia_add_sent">Downloading on the server</string>
+    <string name="torrmedia_add_failed">Could not add the torrent</string>
     <string name="qbit_send_error">qBittorrent error</string>
     <string name="qbit_only_magnet">Only magnet links can be sent</string>
     <string name="torrmedia_url_title">torrmedia address</string>
@@ -343,6 +356,8 @@
     <string name="torrmedia_action_start">Start</string>
     <string name="torrmedia_action_stop">Stop</string>
     <string name="torrmedia_action_recheck">Recheck data</string>
+    <string name="torrmedia_action_delete_watched">Delete watched episodes</string>
+    <string name="torrmedia_action_more">More</string>
     <string name="torrmedia_action_remove">Remove torrent</string>
     <string name="torrmedia_action_remove_with_data">Remove with data</string>
     <string name="torrmedia_action_play">Play</string>
@@ -353,6 +368,7 @@
     <string name="torrmedia_action_unavailable">The server does not allow this action right now</string>
     <string name="torrmedia_remove_confirm">The torrent will be removed, the files on disk will stay</string>
     <string name="torrmedia_remove_with_data_confirm">The torrent and its files on the server will be deleted</string>
+    <string name="torrmedia_delete_watched_confirm">Episodes to delete: %1$d. Unwatched ones stay on the server</string>
     <string name="torrmedia_phase_waiting">waiting</string>
     <string name="torrmedia_phase_stopping">stopping</string>
     <string name="torrmedia_phase_trimming">freeing space</string>
@@ -370,7 +386,5 @@
     <string name="qbit_speed">Speed</string>
     <string name="qbit_eta">ETA</string>
     <string name="qbit_added">Added</string>
-    <string name="qbit_categories_error">Could not read the category list</string>
-    <string name="qbit_send_confirm">Send this link to qBittorrent?</string>
     <string name="torrmedia_item_gone">Release is gone</string>
 </resources>

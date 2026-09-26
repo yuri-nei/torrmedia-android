@@ -183,10 +183,10 @@ class TorrmediaModelsTest {
     @Test
     fun `health carries the contract version`() {
         val health = parseHealth(
-            """{"version":"2026-07-28.1","contract":2,
+            """{"version":"2026-07-28.1","contract":1,
                 "checks":{"root":"ok","viewed":"ok","qbittorrent":"ok"}}"""
         )
-        assertEquals(2, health.contract)
+        assertEquals(1, health.contract)
         assertEquals("2026-07-28.1", health.version)
         assertEquals("ok", health.checks["qbittorrent"])
     }
@@ -212,20 +212,43 @@ class TorrmediaModelsTest {
         val downloading = setOf(ItemAction.STOP, ItemAction.RECHECK)
         assertEquals(ItemAction.STOP, primaryTransferAction(downloading))
         assertEquals(emptyList<ItemAction>(), removalActions(downloading))
+        assertEquals(listOf(ItemAction.RECHECK), itemMenuActions(downloading))
 
         val checking = emptySet<ItemAction>()
         assertNull(primaryTransferAction(checking))
         assertEquals(emptyList<ItemAction>(), removalActions(checking))
+        assertEquals(emptyList<ItemAction>(), itemMenuActions(checking))
 
         val stopped = setOf(ItemAction.START, ItemAction.REMOVE, ItemAction.REMOVE_WITH_DATA)
         assertEquals(ItemAction.START, primaryTransferAction(stopped))
         assertEquals(listOf(ItemAction.REMOVE, ItemAction.REMOVE_WITH_DATA), removalActions(stopped))
+        assertEquals(emptyList<ItemAction>(), itemMenuActions(stopped))
 
         assertEquals(emptyList<FileAction>(), fileMenuActions(setOf(FileAction.PLAY)))
         assertEquals(
             listOf(FileAction.SET_VIEWED, FileAction.DELETE),
             fileMenuActions(setOf(FileAction.PLAY, FileAction.DELETE, FileAction.SET_VIEWED))
         )
+
+        assertEquals(
+            listOf(ItemAction.RECHECK, ItemAction.DELETE_WATCHED),
+            itemMenuActions(setOf(ItemAction.STOP, ItemAction.RECHECK, ItemAction.DELETE_WATCHED))
+        )
+    }
+
+    @Test
+    fun `delete watched counts only what the server allows`() {
+        val item = parseItem(
+            """{"id":"p:abc","actions":["delete_watched"],"files":[
+                 {"id":"a","watch":"watched","actions":["play","delete"]},
+                 {"id":"b","watch":"started","actions":["play","delete"]},
+                 {"id":"c","watch":"watched","actions":["play"]},
+                 {"id":"d","watch":"watched","actions":["play","delete"]}
+               ]}"""
+        )
+        assertTrue(ItemAction.DELETE_WATCHED in item.actions)
+        assertEquals(2, watchedToDelete(item.files.orEmpty()))
+        assertEquals(0, watchedToDelete(emptyList()))
     }
 
     @Test
@@ -271,6 +294,75 @@ class TorrmediaModelsTest {
         val file = parseItem(json).files!![0]
         assertEquals(FileStatus.UNKNOWN, file.status)
         assertEquals(setOf(FileAction.PLAY), file.actions)
+    }
+
+
+    private val draftBody = """
+        {"id":"dr_4f2b91c0a3d7","status":"ready","title":"Series.S01","size":6442450944,
+         "category":null,"item":null,"error":null,
+         "files":[
+           {"id":"ZTAx","name":"e01.mkv","path":"e01.mkv","size":3221225472,"wanted":true},
+           {"id":"c2FtcA","name":"sample.mkv","path":"extras/sample.mkv","size":3221225472,"wanted":false}
+         ],
+         "storage":{"free":41231234560,"total":105551355904,"reserve":536870912}}
+    """.trimIndent()
+
+    @Test
+    fun `draft carries files, preselection and free space`() {
+        val draft = parseDraft(draftBody)
+        assertEquals(DraftStatus.READY, draft.status)
+        assertEquals("Series.S01", draft.title)
+        assertEquals(6442450944L, draft.size)
+        assertNull(draft.category)
+        assertNull(draft.item)
+        assertEquals(2, draft.files.size)
+        assertTrue(draft.files[0].wanted)
+        assertFalse(draft.files[1].wanted)
+        assertEquals("extras/sample.mkv", draft.files[1].path)
+        assertEquals(41231234560L, draft.storage.free)
+        assertEquals(536870912L, draft.storage.reserve)
+    }
+
+    @Test
+    fun `unknown free space is null, not zero`() {
+        val draft = parseDraft(
+            """{"id":"dr_1","status":"resolving","title":"","size":0,"category":null,
+                "item":null,"error":null,"files":[],
+                "storage":{"free":null,"total":null,"reserve":536870912}}"""
+        )
+        assertEquals(DraftStatus.RESOLVING, draft.status)
+        assertNull(draft.storage.free)
+        assertNull(draft.storage.total)
+        val files = parseDraft(draftBody).files
+        assertNull(missingBytes(files, setOf(files[0].id), draft.storage))
+    }
+
+    @Test
+    fun `unknown draft status stays unknown`() {
+        val draft = parseDraft(
+            """{"id":"dr_1","status":"teleporting","title":"X","size":1,"category":null,
+                "item":null,"error":null,"files":[],"storage":{"free":1,"total":2,"reserve":0}}"""
+        )
+        assertEquals(DraftStatus.UNKNOWN, draft.status)
+    }
+
+    @Test
+    fun `selection size and shortfall are counted with the server reserve`() {
+        val draft = parseDraft(draftBody)
+        val all = draft.files.map { it.id }.toSet()
+        assertEquals(6442450944L, selectedBytes(draft.files, all))
+        assertEquals(3221225472L, selectedBytes(draft.files, setOf("ZTAx")))
+
+        assertEquals(0L, missingBytes(draft.files, all, draft.storage))
+        val tight = Storage(free = 2L shl 30, total = 100L shl 30, reserve = 512L shl 20)
+        assertEquals(
+            3221225472L + (512L shl 20) - (2L shl 30),
+            missingBytes(draft.files, setOf("ZTAx"), tight)
+        )
+        assertEquals(0L, missingBytes(draft.files, emptySet(), draft.storage))
+        assertEquals(0L, missingBytes(draft.files, emptySet(), tight))
+        assertEquals(0L, missingBytes(draft.files, emptySet(),
+            Storage(free = 0, total = 100L shl 30, reserve = 512L shl 20)))
     }
 
 }
