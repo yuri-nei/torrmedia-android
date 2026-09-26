@@ -114,6 +114,8 @@ object DonateMessage {
 
     @SuppressLint("RestrictedApi")
     fun showDonate(activity: AppCompatActivity) {
+        if (!Settings.showDonate())
+            return
         activity.lifecycleScope.launch(Dispatchers.IO) {
             synchronized(showDonate) {
                 val last: Long = Settings.getLastViewDonate()

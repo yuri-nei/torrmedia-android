@@ -113,6 +113,13 @@
         app:title="@string/show_cover_title" />
 
     <SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:summaryOff="@string/show_donate_sum_off"
+        android:summaryOn="@string/show_donate_sum_on"
+        app:key="show_donate"
+        app:title="@string/show_donate_title" />
+
+    <SwitchPreferenceCompat
         android:defaultValue="false"
         android:summaryOff="@string/sort_torrents_list_sum_off"
         android:summaryOn="@string/sort_torrents_list_sum_on"

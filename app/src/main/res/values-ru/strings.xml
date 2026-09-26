@@ -282,6 +282,9 @@
     <string name="torrmedia_test_title">Проверить связь</string>
     <string name="torrmedia_test_summary">Тест TCP и API для torrmedia</string>
     <string name="torrmedia_disconnected">нет связи</string>
+    <string name="show_donate_title">Напоминание о пожертвовании</string>
+    <string name="show_donate_sum_on">Показывается при запуске не чаще раза в 3 часа</string>
+    <string name="show_donate_sum_off">Не показывается</string>
     <string name="torrmedia_list_ready_fmt">готово %1$d из %2$d</string>
     <string name="torrmedia_list_watched_fmt">просмотрено %1$d</string>
     <string name="torrmedia_list_watched">просмотрено</string>

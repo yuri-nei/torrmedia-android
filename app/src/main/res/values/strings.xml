@@ -345,6 +345,9 @@
     <string name="torrmedia_test_title">Check connection</string>
     <string name="torrmedia_test_summary">TCP and API self-test for torrmedia</string>
     <string name="torrmedia_disconnected">no connection</string>
+    <string name="show_donate_title">Donation reminder</string>
+    <string name="show_donate_sum_on">Shown at startup at most once every 3 hours</string>
+    <string name="show_donate_sum_off">Not shown</string>
     <string name="torrmedia_list_ready_fmt">%1$d of %2$d ready</string>
     <string name="torrmedia_list_watched_fmt">%1$d watched</string>
     <string name="torrmedia_list_watched">watched</string>
