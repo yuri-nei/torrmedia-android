@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <style name="Theme.TorrServe.MdDark" parent="Theme.TorrServe.Dark">
+        <item name="android:windowBackground">@color/md_dark_bg</item>
+        <item name="android:colorBackground">@color/md_dark_bg</item>
+        <item name="colorBackgroundFloating">@color/md_dark_dialog</item>
+        <item name="colorSurface">@color/md_dark_surface</item>
+        <item name="colorOnSurface">@color/md_dark_text</item>
+        <item name="colorOnBackground">@color/md_dark_text</item>
+        <item name="android:textColorPrimary">@color/md_dark_text</item>
+        <item name="android:textColorSecondary">@color/md_dark_text_secondary</item>
+        <!-- attr colors -->
+        <item name="colorBright">@color/md_dark_text</item>
+        <item name="colorDone">@color/md_dark_done</item>
+        <item name="colorHost">@color/md_dark_done</item>
+        <item name="colorMainMenu">@color/md_dark_surface</item>
+        <!-- brand -->
+        <item name="colorPrimary">@color/md_dark_primary</item>
+        <item name="colorPrimaryVariant">@color/md_dark_primary_variant</item>
+        <item name="colorPrimaryDark">@color/md_dark_bg</item>
+        <item name="colorOnPrimary">@color/md_dark_bg</item>
+        <item name="colorSecondary">@color/md_dark_secondary</item>
+        <item name="colorSecondaryVariant">@color/md_dark_primary_variant</item>
+        <item name="colorOnSecondary">@color/md_dark_text</item>
+        <item name="colorAccent">@color/md_dark_primary</item>
+        <item name="colorError">@color/md_dark_error</item>
+        <!-- bars -->
+        <item name="android:statusBarColor" tools:targetApi="l">@color/md_dark_bg</item>
+        <item name="android:navigationBarColor" tools:targetApi="l">@color/md_dark_bg</item>
+        <!-- custom -->
+        <item name="android:listDivider">@drawable/divider_md_dark</item>
+        <item name="alertDialogTheme">@style/AlertDialog.MdDark</item>
+    </style>
+
+    <style name="Theme.TorrServe.MdLight" parent="Theme.TorrServe.Light">
+        <item name="android:windowBackground">@color/md_light_bg</item>
+        <item name="android:colorBackground">@color/md_light_bg</item>
+        <item name="colorBackgroundFloating">@color/md_light_surface</item>
+        <item name="colorSurface">@color/md_light_surface</item>
+        <item name="colorOnSurface">@color/md_light_text</item>
+        <item name="colorOnBackground">@color/md_light_text</item>
+        <item name="android:textColorPrimary">@color/md_light_text</item>
+        <item name="android:textColorSecondary">@color/md_light_text_secondary</item>
+        <!-- attr colors -->
+        <item name="colorBright">@color/md_light_text</item>
+        <item name="colorDone">@color/md_light_done</item>
+        <item name="colorHost">@color/md_light_done</item>
+        <item name="colorMainMenu">@color/md_light_menu</item>
+        <!-- brand -->
+        <item name="colorPrimary">@color/md_light_primary</item>
+        <item name="colorPrimaryVariant">@color/md_light_primary_variant</item>
+        <item name="colorPrimaryDark">@color/md_light_menu</item>
+        <item name="colorOnPrimary">@color/md_light_surface</item>
+        <item name="colorSecondary">@color/md_light_primary</item>
+        <item name="colorSecondaryVariant">@color/md_light_primary_variant</item>
+        <item name="colorOnSecondary">@color/md_light_surface</item>
+        <item name="colorAccent">@color/md_light_primary</item>
+        <item name="colorError">@color/md_light_error</item>
+        <item name="android:statusBarColor" tools:targetApi="l">@color/md_light_menu</item>
+        <item name="android:navigationBarColor" tools:targetApi="l">@color/md_light_menu</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
+        <!-- custom -->
+        <item name="android:listDivider">@drawable/divider_md_light</item>
+        <item name="alertDialogTheme">@style/AlertDialog.MdLight</item>
+    </style>
+
+    <style name="AlertDialog.MdDark" parent="AlertDialog">
+        <item name="android:windowBackground">@drawable/rc_background_md_dark</item>
+        <item name="colorPrimary">@color/md_dark_primary</item>
+        <item name="colorAccent">@color/md_dark_primary</item>
+    </style>
+
+    <style name="AlertDialog.MdLight" parent="AlertDialog">
+        <item name="android:windowBackground">@drawable/rc_background_md_light</item>
+        <item name="colorPrimary">@color/md_light_primary</item>
+        <item name="colorAccent">@color/md_light_primary</item>
+    </style>
+
+    <style name="PlayDialog.MdDark" parent="PlayDialog.Dark">
+        <item name="android:windowBackground">@drawable/rc_background_md_dark</item>
+        <item name="android:listDivider">@drawable/divider_md_dark</item>
+        <item name="colorSurface">@color/md_dark_dialog</item>
+        <item name="colorOnSurface">@color/md_dark_text</item>
+        <item name="colorBright">@color/md_dark_text</item>
+        <item name="colorDone">@color/md_dark_done</item>
+        <item name="colorHost">@color/md_dark_done</item>
+        <item name="colorPrimary">@color/md_dark_primary</item>
+        <item name="colorPrimaryVariant">@color/md_dark_primary_variant</item>
+        <item name="colorOnPrimary">@color/md_dark_bg</item>
+        <item name="colorSecondary">@color/md_dark_secondary</item>
+        <item name="colorSecondaryVariant">@color/md_dark_primary_variant</item>
+        <item name="colorOnSecondary">@color/md_dark_text</item>
+        <item name="colorAccent">@color/md_dark_primary</item>
+        <item name="android:statusBarColor" tools:targetApi="l">@color/md_dark_bg</item>
+        <item name="android:navigationBarColor" tools:targetApi="l">@color/md_dark_bg</item>
+        <item name="alertDialogTheme">@style/AlertDialog.MdDark</item>
+    </style>
+
+    <style name="PlayDialog.MdLight" parent="PlayDialog.Light">
+        <item name="android:windowBackground">@drawable/rc_background_md_light</item>
+        <item name="android:listDivider">@drawable/divider_md_light</item>
+        <item name="colorSurface">@color/md_light_surface</item>
+        <item name="colorOnSurface">@color/md_light_text</item>
+        <item name="colorBright">@color/md_light_text</item>
+        <item name="colorDone">@color/md_light_done</item>
+        <item name="colorHost">@color/md_light_done</item>
+        <item name="colorPrimary">@color/md_light_primary</item>
+        <item name="colorPrimaryVariant">@color/md_light_primary_variant</item>
+        <item name="colorOnPrimary">@color/md_light_surface</item>
+        <item name="colorSecondary">@color/md_light_primary</item>
+        <item name="colorSecondaryVariant">@color/md_light_primary_variant</item>
+        <item name="colorOnSecondary">@color/md_light_surface</item>
+        <item name="colorAccent">@color/md_light_primary</item>
+        <item name="android:statusBarColor" tools:targetApi="l">@color/md_light_menu</item>
+        <item name="android:navigationBarColor" tools:targetApi="l">@color/md_light_menu</item>
+        <item name="alertDialogTheme">@style/AlertDialog.MdLight</item>
+    </style>
+</resources>

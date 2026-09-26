@@ -100,12 +100,16 @@
         <item>亮色</item>
         <item>暗色</item>
         <item>AMOLED</item>
+        <item>Material 暗色</item>
+        <item>Material 亮色</item>
     </string-array>
     <string-array name="app_theme_entries_values" translatable="false">
         <item>auto</item>
         <item>light</item>
         <item>dark</item>
         <item>black</item>
+        <item>md_dark</item>
+        <item>md_light</item>
     </string-array>
 
     <string name="add_play">添加并播放</string>

@@ -99,12 +99,16 @@
         <item>Light</item>
         <item>Dark</item>
         <item>AMOLED</item>
+        <item>Material Dark</item>
+        <item>Material Light</item>
     </string-array>
     <string-array name="app_theme_entries_values" translatable="false">
         <item>auto</item>
         <item>light</item>
         <item>dark</item>
         <item>black</item>
+        <item>md_dark</item>
+        <item>md_light</item>
     </string-array>
 
     <string name="add_play">Add &amp; Play</string>

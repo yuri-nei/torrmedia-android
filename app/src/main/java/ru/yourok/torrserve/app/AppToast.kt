@@ -26,7 +26,7 @@ class AppToast(
     init {
         var bg = R.drawable.snackbar
         var tc = R.color.tv_white
-        if (ThemeUtil.selectedTheme == R.style.Theme_TorrServe_Light) {
+        if (ThemeUtil.isLightTheme) {
             bg = R.drawable.snackbar_dark
             tc = R.color.tv_white
         }

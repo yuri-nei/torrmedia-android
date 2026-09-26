@@ -85,6 +85,8 @@
         <item>Світла</item>
         <item>Темна</item>
         <item>AMOLED</item>
+        <item>Material темна</item>
+        <item>Material світла</item>
     </string-array>
     <string name="add_play">Додати і програти</string>
     <string name="play">Програти</string>

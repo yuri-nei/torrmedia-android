@@ -2,4 +2,27 @@
 <resources>
     <color name="torrmedia_disk_low">#ffb300</color>
     <color name="torrmedia_alert">#e5534b</color>
+
+    <color name="md_dark_bg">#202124</color>
+    <color name="md_dark_surface">#292a2d</color>
+    <color name="md_dark_dialog">#2d2e31</color>
+    <color name="md_dark_text">#e8eaed</color>
+    <color name="md_dark_text_secondary">#bdc1c6</color>
+    <color name="md_dark_primary">#8ab4f8</color>
+    <color name="md_dark_primary_variant">#669df6</color>
+    <color name="md_dark_secondary">#4285f4</color>
+    <color name="md_dark_done">#81c995</color>
+    <color name="md_dark_error">#f28b82</color>
+    <color name="md_dark_outline">#3c4043</color>
+
+    <color name="md_light_bg">#f8f9fa</color>
+    <color name="md_light_surface">#ffffff</color>
+    <color name="md_light_menu">#f1f3f4</color>
+    <color name="md_light_text">#202124</color>
+    <color name="md_light_text_secondary">#5f6368</color>
+    <color name="md_light_primary">#1a73e8</color>
+    <color name="md_light_primary_variant">#1967d2</color>
+    <color name="md_light_done">#1e8e3e</color>
+    <color name="md_light_error">#d93025</color>
+    <color name="md_light_outline">#dadce0</color>
 </resources>

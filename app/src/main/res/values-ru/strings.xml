@@ -90,6 +90,8 @@
         <item>Светлая</item>
         <item>Тёмная</item>
         <item>AMOLED</item>
+        <item>Material тёмная</item>
+        <item>Material светлая</item>
     </string-array>
     <string name="add_play">Доб. и играть</string>
     <string name="play">Играть</string>

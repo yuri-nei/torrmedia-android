@@ -68,6 +68,8 @@ class PlayActivity : AppCompatActivity() {
             "dark" -> setTheme(R.style.PlayDialog_Dark)
             "light" -> setTheme(R.style.PlayDialog_Light)
             "black" -> setTheme(R.style.PlayDialog_Black)
+            "md_dark" -> setTheme(R.style.PlayDialog_MdDark)
+            "md_light" -> setTheme(R.style.PlayDialog_MdLight)
             else -> setTheme(R.style.PlayDialog_DayNight)
         }
         setContentView(R.layout.play_activity)

@@ -87,6 +87,8 @@
         <item>Luminoasă</item>
         <item>Întunecată</item>
         <item>AMOLED</item>
+        <item>Material întunecată</item>
+        <item>Material luminoasă</item>
     </string-array>
     <string name="add_play">Adaugă și redă</string>
     <string name="play">Redă</string>

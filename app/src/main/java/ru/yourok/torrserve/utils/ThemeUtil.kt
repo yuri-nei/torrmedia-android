@@ -49,9 +49,14 @@ class ThemeUtil {
                     "light" -> R.style.Theme_TorrServe_Light
                     "dark" -> R.style.Theme_TorrServe_Dark
                     "black" -> R.style.Theme_TorrServe_Black
+                    "md_dark" -> R.style.Theme_TorrServe_MdDark
+                    "md_light" -> R.style.Theme_TorrServe_MdLight
                     else -> R.style.Theme_TorrServe_DayNight
                 }
             }
+
+        val isLightTheme: Boolean
+            get() = selectedTheme == R.style.Theme_TorrServe_Light || selectedTheme == R.style.Theme_TorrServe_MdLight
 
         @ColorInt
         fun getColorFromAttr(
@@ -75,8 +80,8 @@ class ThemeUtil {
 
         fun setNightMode() {
             when (getTheme()) {
-                "dark", "black" -> AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
-                "light" -> AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+                "dark", "black", "md_dark" -> AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
+                "light", "md_light" -> AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
                 else -> if (Utils.isTvBox()) AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_AUTO_TIME) else
                     AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM) // phones
             }
