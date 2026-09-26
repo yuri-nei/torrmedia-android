@@ -7,6 +7,9 @@ import ru.yourok.torrserve.server.api.FilePriority
 import ru.yourok.torrserve.server.api.FileStatus
 import ru.yourok.torrserve.server.api.ItemAction
 import ru.yourok.torrserve.server.api.ItemStatus
+import ru.yourok.torrserve.server.models.torrent.Torrent
+import ru.yourok.torrserve.utils.Format
+import java.util.Locale
 
 
 fun itemStatusLabel(status: ItemStatus): String = App.context.getString(
@@ -61,6 +64,32 @@ fun filePriorityLabel(priority: FilePriority): String = App.context.getString(
         FilePriority.MAX -> R.string.torrmedia_priority_max
     }
 )
+
+fun mediaListSummary(t: Torrent, stale: Boolean): String {
+    val parts = mutableListOf<String>()
+    if (stale)
+        parts += App.context.getString(R.string.torrmedia_disconnected).capitalized()
+
+    var head = itemStatusLabel(t.torrmediaStatus).capitalized()
+    val pct = if (t.torrent_size > 0) (t.loaded_size * 100 / t.torrent_size).toInt().coerceIn(0, 100) else 100
+    if (pct < 100 && t.torrmediaStatus != ItemStatus.SHELF)
+        head += " $pct%"
+    parts += head
+
+    if (t.torrmediaStatus == ItemStatus.DOWNLOADING && t.download_speed > 0)
+        parts += "↓ " + Format.speedFmt(t.download_speed)
+    if (t.torrmediaFilesTotal > 1)
+        parts += App.context.getString(R.string.torrmedia_list_ready_fmt, t.torrmediaFilesReady, t.torrmediaFilesTotal)
+    if (t.torrmediaFilesWatched > 0)
+        parts += if (t.torrmediaFilesTotal > 1)
+            App.context.getString(R.string.torrmedia_list_watched_fmt, t.torrmediaFilesWatched)
+        else
+            App.context.getString(R.string.torrmedia_list_watched)
+    return parts.joinToString(" · ")
+}
+
+private fun String.capitalized(): String =
+    replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
 
 fun operationPhaseLabel(phase: String?): String {
     if (phase.isNullOrBlank())

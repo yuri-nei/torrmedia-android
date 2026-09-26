@@ -18,7 +18,7 @@ import com.bumptech.glide.load.resource.bitmap.RoundedCorners
 import com.bumptech.glide.request.RequestOptions
 import ru.yourok.torrserve.R
 import ru.yourok.torrserve.server.models.torrent.Torrent
-import ru.yourok.torrserve.ui.fragments.qbit.itemStatusLabel
+import ru.yourok.torrserve.ui.fragments.qbit.mediaListSummary
 import ru.yourok.torrserve.settings.Settings
 import ru.yourok.torrserve.utils.CImageSpan
 import ru.yourok.torrserve.utils.Format
@@ -111,20 +111,7 @@ class TorrentsAdapter(private val activity: FragmentActivity) : BaseAdapter() {
             vi.findViewById<TextView>(R.id.tvTorrName)?.text = title
 
         vi.findViewById<TextView>(R.id.tvTorrHash)?.text = when (list[position].src) {
-            "torrmedia" -> {
-                val total = list[position].torrent_size
-                val pct = if (total > 0) (list[position].loaded_size * 100 / total).toInt() else 0
-                val mark = if (pct >= 100) "\u2713" else "$pct%"
-                val status = "${itemStatusLabel(list[position].torrmediaStatus).uppercase(Locale.getDefault())} $mark"
-                val badge = if (isStale(list[position]))
-                    "${vi.context.getString(R.string.torrmedia_disconnected).uppercase(Locale.getDefault())} · $status"
-                else
-                    status
-                if (list[position].torrmediaFilesTotal > 0)
-                    "$badge  \u2713 ${list[position].torrmediaFilesWatched}/${list[position].torrmediaFilesTotal}"
-                else
-                    badge
-            }
+            "torrmedia" -> mediaListSummary(list[position], isStale(list[position]))
 
             else -> hash.uppercase(Locale.getDefault())
         }

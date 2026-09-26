@@ -282,6 +282,9 @@
     <string name="torrmedia_test_title">Проверить связь</string>
     <string name="torrmedia_test_summary">Тест TCP и API для torrmedia</string>
     <string name="torrmedia_disconnected">нет связи</string>
+    <string name="torrmedia_list_ready_fmt">готово %1$d из %2$d</string>
+    <string name="torrmedia_list_watched_fmt">просмотрено %1$d</string>
+    <string name="torrmedia_list_watched">просмотрено</string>
     <string name="torrmedia_loading">Загрузка…</string>
     <string name="torrmedia_status_downloading">качается</string>
     <string name="torrmedia_status_seeding">раздаётся</string>
