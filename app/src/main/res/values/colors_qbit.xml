@@ -8,9 +8,9 @@
     <color name="md_dark_dialog">#2d2e31</color>
     <color name="md_dark_text">#e8eaed</color>
     <color name="md_dark_text_secondary">#bdc1c6</color>
-    <color name="md_dark_primary">#8ab4f8</color>
-    <color name="md_dark_primary_variant">#669df6</color>
-    <color name="md_dark_secondary">#4285f4</color>
+    <color name="md_dark_primary">#a1b6d9</color>
+    <color name="md_dark_primary_variant">#87a1c9</color>
+    <color name="md_dark_secondary">#496ba2</color>
     <color name="md_dark_done">#81c995</color>
     <color name="md_dark_error">#f28b82</color>
     <color name="md_dark_outline">#3c4043</color>
