@@ -106,6 +106,12 @@ object TorrmediaApi {
     fun enableFile(item: String, file: String): Operation =
         operationCall("POST", "/items/${seg(item)}/files/${seg(file)}/enable")
 
+    fun setPriority(item: String, file: String, priority: FilePriority): Operation {
+        val body = JsonObject()
+        body.addProperty("priority", priority.wire)
+        return operationCall("PUT", "/items/${seg(item)}/files/${seg(file)}/priority", body.toString())
+    }
+
 
     fun setViewed(item: String, file: String, state: WatchState) {
         if (state == WatchState.NONE) {

@@ -11,6 +11,8 @@ enum class ItemStatus { DOWNLOADING, SEEDING, STOPPED, CHECKING, ERROR, SHELF, U
 
 enum class FileStatus { READY, PARTIAL, SKIPPED, MISSING, UNKNOWN }
 
+enum class FilePriority(val wire: String) { NORMAL("normal"), HIGH("high"), MAX("max") }
+
 /// watch: null | "started" | "watched"
 enum class WatchState { NONE, STARTED, WATCHED }
 
@@ -20,7 +22,7 @@ enum class DraftStatus { RESOLVING, READY, CONFIRMING, CONFIRMED, DISCARDING, DI
 
 enum class ItemAction { START, STOP, RECHECK, DELETE_WATCHED, REMOVE, REMOVE_WITH_DATA, CLEAR_VIEWED }
 
-enum class FileAction { PLAY, DELETE, ENABLE, SET_VIEWED, CLEAR_VIEWED }
+enum class FileAction { PLAY, DELETE, ENABLE, SET_PRIORITY, SET_VIEWED, CLEAR_VIEWED }
 
 enum class TorrmediaErrorCode {
     NOT_FOUND, AMBIGUOUS, BUSY, STREAMING, REFUSED, INSUFFICIENT_STORAGE,
@@ -48,6 +50,7 @@ data class MediaFile(
     val size: Long,
     val progress: Double,
     val status: FileStatus,
+    val priority: FilePriority?,
     val watch: WatchState,
     val position: Long,
     val actions: Set<FileAction>,
@@ -162,6 +165,7 @@ fun fileOf(o: JsonObject): MediaFile = MediaFile(
     size = o.long("size"),
     progress = o.dbl("progress"),
     status = wireEnum(o.str("status"), FileStatus.values(), FileStatus.UNKNOWN),
+    priority = o.str("priority")?.trim()?.let { raw -> FilePriority.values().firstOrNull { it.wire == raw } },
     watch = wireEnum(o.str("watch"), WatchState.values(), WatchState.NONE),
     position = o.long("position"),
     actions = wireActions(o.arr("actions"), FileAction.values()),
@@ -296,7 +300,7 @@ fun watchedToDelete(files: List<MediaFile>): Int =
     files.count { it.watch == WatchState.WATCHED && FileAction.DELETE in it.actions }
 
 fun fileMenuActions(actions: Set<FileAction>): List<FileAction> =
-    listOf(FileAction.ENABLE, FileAction.SET_VIEWED, FileAction.CLEAR_VIEWED, FileAction.DELETE)
+    listOf(FileAction.ENABLE, FileAction.SET_PRIORITY, FileAction.SET_VIEWED, FileAction.CLEAR_VIEWED, FileAction.DELETE)
         .filter { it in actions }
 
 

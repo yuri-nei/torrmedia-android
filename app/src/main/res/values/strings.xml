@@ -363,6 +363,19 @@
     <string name="torrmedia_action_play">Play</string>
     <string name="torrmedia_action_delete">Delete episode</string>
     <string name="torrmedia_action_enable">Download this file</string>
+    <string name="header_ts_caption">TorrServer</string>
+    <string name="header_torrmedia_caption">Download server</string>
+    <string name="header_torrmedia_connecting">connecting…</string>
+    <string name="header_torrmedia_offline">no connection</string>
+    <string name="header_torrmedia_qbit_down">qBittorrent down</string>
+    <string name="header_torrmedia_degraded">server fault</string>
+    <string name="header_torrmedia_unauthorized">bad token</string>
+    <string name="header_torrmedia_mismatch">incompatible</string>
+    <string name="header_torrmedia_disk_unknown">free space unknown</string>
+    <string name="torrmedia_action_set_priority">Download priority</string>
+    <string name="torrmedia_priority_normal">normal</string>
+    <string name="torrmedia_priority_high">high</string>
+    <string name="torrmedia_priority_max">maximum</string>
     <string name="torrmedia_action_set_viewed">Mark as watched</string>
     <string name="torrmedia_action_clear_viewed">Remove watch mark</string>
     <string name="torrmedia_action_unavailable">The server does not allow this action right now</string>
@@ -374,6 +387,7 @@
     <string name="torrmedia_phase_trimming">freeing space</string>
     <string name="torrmedia_phase_rechecking">rechecking</string>
     <string name="torrmedia_phase_restarting">restarting</string>
+    <string name="torrmedia_phase_prioritizing">changing priority</string>
     <string name="torrmedia_op_done">Done</string>
     <string name="torrmedia_op_failed">Operation failed</string>
     <string name="torrmedia_op_still_running">Operation is still running</string>

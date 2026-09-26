@@ -31,6 +31,7 @@ import ru.yourok.torrserve.R
 import ru.yourok.torrserve.app.App
 import ru.yourok.torrserve.ext.append
 import ru.yourok.torrserve.server.api.FileAction
+import ru.yourok.torrserve.server.api.FilePriority
 import ru.yourok.torrserve.server.api.FileStatus
 import ru.yourok.torrserve.server.api.Item
 import ru.yourok.torrserve.server.api.ItemAction
@@ -378,10 +379,27 @@ class DownloadsFilesFragment : TSFragment() {
 
             FileAction.ENABLE -> runOperation(OpKind.GENERIC) { TorrmediaApi.enableFile(itemId, file.id) }
 
+            FileAction.SET_PRIORITY -> choosePriority(file)
+
             FileAction.SET_VIEWED -> runViewed { TorrmediaApi.setViewed(itemId, file.id, WatchState.WATCHED) }
 
             FileAction.CLEAR_VIEWED -> runViewed { TorrmediaApi.clearViewed(itemId, file.id) }
         }
+    }
+
+    private fun choosePriority(file: MediaFile) {
+        val options = FilePriority.values()
+        val current = options.indexOf(file.priority)
+        AlertDialog.Builder(requireContext())
+            .setTitle(file.name)
+            .setSingleChoiceItems(options.map { filePriorityLabel(it) }.toTypedArray(), current) { dialog, which ->
+                dialog.dismiss()
+                val chosen = options[which]
+                if (chosen != file.priority)
+                    runOperation(OpKind.GENERIC) { TorrmediaApi.setPriority(itemId, file.id, chosen) }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun confirmRemove(removals: List<ItemAction>) {
@@ -582,6 +600,9 @@ class DownloadsFilesFragment : TSFragment() {
 
                     FileStatus.PARTIAL -> "$size ● ${(row.progress * 100).toInt()}%"
                     else -> "$size ● ${fileStatusLabel(row.status)}"
+                } + when (row.status) {
+                    FileStatus.READY -> ""
+                    else -> row.priority?.takeIf { it != FilePriority.NORMAL }?.let { " ● ${filePriorityLabel(it)}" } ?: ""
                 }
                 val shapeDrawable = MaterialShapeDrawable(shapeAppearanceModel)
                 shapeDrawable.fillColor = ColorStateList.valueOf(chipColor).withAlpha(240)

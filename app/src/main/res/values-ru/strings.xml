@@ -302,6 +302,19 @@
     <string name="torrmedia_action_play">Смотреть</string>
     <string name="torrmedia_action_delete">Удалить серию</string>
     <string name="torrmedia_action_enable">Качать этот файл</string>
+    <string name="header_ts_caption">TorrServer</string>
+    <string name="header_torrmedia_caption">Сервер загрузок</string>
+    <string name="header_torrmedia_connecting">подключаюсь…</string>
+    <string name="header_torrmedia_offline">нет связи</string>
+    <string name="header_torrmedia_qbit_down">qBittorrent молчит</string>
+    <string name="header_torrmedia_degraded">сбой сервера</string>
+    <string name="header_torrmedia_unauthorized">неверный токен</string>
+    <string name="header_torrmedia_mismatch">несовместим</string>
+    <string name="header_torrmedia_disk_unknown">свободное место неизвестно</string>
+    <string name="torrmedia_action_set_priority">Приоритет загрузки</string>
+    <string name="torrmedia_priority_normal">обычный</string>
+    <string name="torrmedia_priority_high">высокий</string>
+    <string name="torrmedia_priority_max">максимальный</string>
     <string name="torrmedia_action_set_viewed">Отметить просмотренной</string>
     <string name="torrmedia_action_clear_viewed">Снять отметку</string>
     <string name="torrmedia_action_unavailable">Сервер сейчас не разрешает это действие</string>
@@ -313,6 +326,7 @@
     <string name="torrmedia_phase_trimming">освобождаю место</string>
     <string name="torrmedia_phase_rechecking">перепроверяю</string>
     <string name="torrmedia_phase_restarting">запускаю обратно</string>
+    <string name="torrmedia_phase_prioritizing">меняю приоритет</string>
     <string name="torrmedia_op_done">Готово</string>
     <string name="torrmedia_op_failed">Операция не удалась</string>
     <string name="torrmedia_op_still_running">Операция всё ещё выполняется</string>

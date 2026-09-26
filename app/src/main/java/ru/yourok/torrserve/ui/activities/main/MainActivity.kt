@@ -16,12 +16,15 @@ import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.content.res.AppCompatResources
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.ColorUtils
 import androidx.core.net.toUri
 import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import com.google.android.material.progressindicator.LinearProgressIndicator
 import com.google.android.material.shape.CornerFamily
 import com.google.android.material.shape.MaterialShapeDrawable
 import com.google.android.material.shape.ShapeAppearanceModel
@@ -50,6 +53,7 @@ import ru.yourok.torrserve.ui.fragments.main.update.apk.UpdaterApk
 import ru.yourok.torrserve.ui.fragments.main.update.server.ServerUpdateFragment
 import ru.yourok.torrserve.ui.fragments.main.update.server.UpdaterServer
 import ru.yourok.torrserve.utils.CImageSpan
+import ru.yourok.torrserve.utils.Format
 import ru.yourok.torrserve.utils.Format.dp2px
 import ru.yourok.torrserve.utils.Net
 import ru.yourok.torrserve.utils.Permission
@@ -96,6 +100,7 @@ class MainActivity : AppCompatActivity() {
         viewModel = ViewModelProvider(this)[StatusViewModel::class.java]
 
         setupNavigator()
+        setupTorrmediaHeader()
 
         lifecycleScope.launch(Dispatchers.IO) {
             TorrService.start()
@@ -147,6 +152,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         themeUtil.onResume(this)
         updateStatus()
+        viewModel.torrmedia.refresh()
         if (Settings.showFab) setupFab()
         if (Settings.showSortFab) setupSortFab()
         lifecycleScope.launch(Dispatchers.IO) {
@@ -212,6 +218,105 @@ class MainActivity : AppCompatActivity() {
                     alpha = 1.0f
                 }
             }
+        }
+    }
+
+    private fun setupTorrmediaHeader() {
+        val block = findViewById<View>(R.id.torrmediaHeader) ?: return
+        val hostView = findViewById<TextView>(R.id.tvTorrmediaHost)
+        val statusView = findViewById<TextView>(R.id.tvTorrmediaStatus)
+        val diskBar = findViewById<LinearProgressIndicator>(R.id.pbTorrmediaDisk)
+        val diskView = findViewById<TextView>(R.id.tvTorrmediaDisk)
+        val diskTextColors = diskView?.textColors
+
+        block.setOnClickListener {
+            viewModel.torrmedia.refresh()
+            SettingsFragment().show(this, R.id.container)
+            closeMenu()
+        }
+        findViewById<DrawerLayout>(R.id.drawerLayout)?.addDrawerListener(object : DrawerLayout.SimpleDrawerListener() {
+            override fun onDrawerOpened(drawerView: View) {
+                viewModel.torrmedia.refresh()
+            }
+        })
+
+        viewModel.torrmedia.observe(this) { h ->
+            if (h.host.isEmpty()) {
+                block.visibility = View.GONE
+                return@observe
+            }
+            block.visibility = View.VISIBLE
+            val hostColor = ThemeUtil.getColorFromAttr(this, R.attr.colorHost)
+            val inactiveColor = ThemeUtil.getColorFromAttr(this, R.attr.colorOnSurface)
+            val alertColor = ContextCompat.getColor(this, R.color.torrmedia_alert)
+            val reachable = h.link != TorrmediaLink.OFFLINE && h.link != TorrmediaLink.CONNECTING
+
+            hostView?.apply {
+                text = h.host
+                setTextColor(if (reachable) hostColor else inactiveColor)
+                alpha = if (reachable) 1.0f else 0.75f
+            }
+            statusView?.apply {
+                val (label, chipColor) = when (h.link) {
+                    TorrmediaLink.ONLINE -> h.version.ifBlank { "ok" } to ThemeUtil.getColorFromAttr(this@MainActivity, R.attr.colorPrimary)
+                    TorrmediaLink.QBIT_DOWN -> getString(R.string.header_torrmedia_qbit_down) to alertColor
+                    TorrmediaLink.DEGRADED -> getString(R.string.header_torrmedia_degraded) to alertColor
+                    TorrmediaLink.UNAUTHORIZED -> getString(R.string.header_torrmedia_unauthorized) to alertColor
+                    TorrmediaLink.MISMATCH -> getString(R.string.header_torrmedia_mismatch) to alertColor
+                    TorrmediaLink.CONNECTING -> getString(R.string.header_torrmedia_connecting) to null
+                    TorrmediaLink.OFFLINE -> getString(R.string.header_torrmedia_offline) to null
+                }
+                text = label
+                if (chipColor == null) {
+                    background = null
+                    setTextColor(inactiveColor)
+                } else {
+                    background = labelChip(chipColor)
+                    setTextColor(ThemeUtil.getColorFromAttr(this@MainActivity, R.attr.colorSurface))
+                }
+            }
+
+            val storage = h.storage
+            val percent = storage?.let { usedPercent(it) }
+            diskBar?.apply {
+                visibility = if (percent == null) View.GONE else View.VISIBLE
+                if (percent != null) {
+                    val color = when (diskLevel(storage)) {
+                        DiskLevel.CRITICAL -> alertColor
+                        DiskLevel.LOW -> ContextCompat.getColor(this@MainActivity, R.color.torrmedia_disk_low)
+                        else -> ThemeUtil.getColorFromAttr(this@MainActivity, R.attr.colorDone)
+                    }
+                    setIndicatorColor(color)
+                    trackColor = ColorUtils.setAlphaComponent(color, 50)
+                    progress = percent
+                }
+            }
+            diskView?.apply {
+                val free = storage?.free
+                val total = storage?.total
+                text = when {
+                    free != null && total != null -> getString(R.string.torrmedia_add_free_fmt, Format.byteFmt(free), Format.byteFmt(total))
+                    free != null -> getString(R.string.torrmedia_add_free_short_fmt, Format.byteFmt(free))
+                    reachable && storage != null -> getString(R.string.header_torrmedia_disk_unknown)
+                    else -> null
+                }
+                visibility = if (text.isNullOrEmpty()) View.GONE else View.VISIBLE
+                if (storage != null && diskLevel(storage) == DiskLevel.CRITICAL)
+                    setTextColor(alertColor)
+                else
+                    diskTextColors?.let { setTextColor(it) }
+            }
+        }
+    }
+
+    private fun labelChip(color: Int): MaterialShapeDrawable {
+        val shape = ShapeAppearanceModel().toBuilder()
+            .setAllCorners(CornerFamily.ROUNDED, dp2px(2.0f).toFloat())
+            .build()
+        val colors = ColorStateList.valueOf(color)
+        return MaterialShapeDrawable(shape).apply {
+            fillColor = colors.withAlpha(160)
+            setStroke(2.0f, colors.withAlpha(100))
         }
     }
 

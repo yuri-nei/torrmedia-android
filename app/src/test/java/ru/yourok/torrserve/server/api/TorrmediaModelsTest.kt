@@ -208,6 +208,28 @@ class TorrmediaModelsTest {
 
 
     @Test
+    fun `file priority is read from the contract vocabulary`() {
+        val item = parseItem(
+            """
+            {"id":"p:abc","title":"Release","status":"downloading","actions":[],
+             "files":[
+               {"id":"a","name":"e01.mkv","status":"partial","priority":"high","actions":["set_priority","delete"]},
+               {"id":"b","name":"e02.mkv","status":"skipped","priority":null,"actions":["enable"]},
+               {"id":"c","name":"e03.mkv","status":"missing","priority":"urgent","actions":[]},
+               {"id":"d","name":"e04.mkv","status":"missing","priority":"max","actions":[]}
+             ]}
+            """.trimIndent()
+        )
+        val files = item.files ?: emptyList()
+        assertEquals(FilePriority.HIGH, files[0].priority)
+        assertEquals(setOf(FileAction.SET_PRIORITY, FileAction.DELETE), files[0].actions)
+        assertEquals(listOf(FileAction.SET_PRIORITY, FileAction.DELETE), fileMenuActions(files[0].actions))
+        assertNull(files[1].priority)
+        assertNull(files[2].priority)
+        assertEquals(FilePriority.MAX, files[3].priority)
+    }
+
+    @Test
     fun `action missing from actions is never offered`() {
         val downloading = setOf(ItemAction.STOP, ItemAction.RECHECK)
         assertEquals(ItemAction.STOP, primaryTransferAction(downloading))

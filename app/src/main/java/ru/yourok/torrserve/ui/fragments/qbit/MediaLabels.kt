@@ -3,6 +3,7 @@ package ru.yourok.torrserve.ui.fragments.qbit
 import ru.yourok.torrserve.R
 import ru.yourok.torrserve.app.App
 import ru.yourok.torrserve.server.api.FileAction
+import ru.yourok.torrserve.server.api.FilePriority
 import ru.yourok.torrserve.server.api.FileStatus
 import ru.yourok.torrserve.server.api.ItemAction
 import ru.yourok.torrserve.server.api.ItemStatus
@@ -47,8 +48,17 @@ fun fileActionLabel(action: FileAction): String = App.context.getString(
         FileAction.PLAY -> R.string.torrmedia_action_play
         FileAction.DELETE -> R.string.torrmedia_action_delete
         FileAction.ENABLE -> R.string.torrmedia_action_enable
+        FileAction.SET_PRIORITY -> R.string.torrmedia_action_set_priority
         FileAction.SET_VIEWED -> R.string.torrmedia_action_set_viewed
         FileAction.CLEAR_VIEWED -> R.string.torrmedia_action_clear_viewed
+    }
+)
+
+fun filePriorityLabel(priority: FilePriority): String = App.context.getString(
+    when (priority) {
+        FilePriority.NORMAL -> R.string.torrmedia_priority_normal
+        FilePriority.HIGH -> R.string.torrmedia_priority_high
+        FilePriority.MAX -> R.string.torrmedia_priority_max
     }
 )
 
@@ -61,6 +71,7 @@ fun operationPhaseLabel(phase: String?): String {
         "trimming" -> R.string.torrmedia_phase_trimming
         "rechecking" -> R.string.torrmedia_phase_rechecking
         "restarting" -> R.string.torrmedia_phase_restarting
+        "prioritizing" -> R.string.torrmedia_phase_prioritizing
         else -> return phase
     }
     return App.context.getString(res)

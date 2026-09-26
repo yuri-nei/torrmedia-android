@@ -19,6 +19,8 @@ class StatusViewModel : ViewModel() {
     var data: MutableLiveData<String>? = null
     var host: MutableLiveData<String>? = null
 
+    val torrmedia = TorrmediaHeaderLiveData()
+
     fun get(): LiveData<String> {
         if (data == null) {
             data = MutableLiveData()
@@ -39,6 +41,7 @@ class StatusViewModel : ViewModel() {
         super.onCleared()
         isWork = false
         isWorkHost = false
+        torrmedia.close()
     }
 
     private fun update() {
