@@ -7,12 +7,13 @@ import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
 import android.widget.ListView
 import android.widget.TextView
+import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -31,11 +32,8 @@ import ru.yourok.torrserve.utils.TorrentHelper
 class TorrentsFragment : TSFragment() {
 
     private var torrentAdapter: TorrentsAdapter? = null
-    private lateinit var emptyView: TextView
     private var sortMode: Boolean = Settings.sortTorrByTitle
-
-    private var mediaJob: Job? = null
-    private var stateJob: Job? = null
+    private var category = ""
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -43,9 +41,9 @@ class TorrentsFragment : TSFragment() {
     ): View {
         val vi = inflater.inflate(R.layout.main_fragment, container, false)
         torrentAdapter = TorrentsAdapter(requireActivity())
-        emptyView = vi.findViewById(R.id.empty_view)
         vi.findViewById<ListView>(R.id.lvTorrents)?.let { lvTorrents ->
             lvTorrents.adapter = torrentAdapter
+            lvTorrents.emptyView = vi.findViewById(R.id.empty_view)
             lvTorrents.setOnItemClickListener { _, _, i, _ ->
                 val torr = torrentAdapter?.getItem(i) as Torrent
                 if (torr.src == "torrmedia") {
@@ -69,18 +67,35 @@ class TorrentsFragment : TSFragment() {
         return vi
     }
 
-    override fun onResume() {
-        super.onResume()
-        lifecycleScope.launch {
-            start()
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        category = arguments?.getString("category") ?: ""
+        viewModel = ViewModelProvider(this)[TorrentsViewModel::class.java]
+        val model = viewModel as TorrentsViewModel
+        model.getData().observe(viewLifecycleOwner) { updateList() }
+        view.findViewById<EditText>(R.id.etSearch).doAfterTextChanged { updateList() }
 
-            val category =
-                arguments?.getString("category") ?: ""
-
-            if (category.isNotEmpty()) {
-                filter(category)
+        val emptyView = view.findViewById<TextView>(R.id.empty_view)
+        viewLifecycleOwner.lifecycleScope.launch {
+            model.mediaState.combine(model.mediaConnected) { state, connected ->
+                when {
+                    state is MediaState.Loading -> getString(R.string.torrmedia_loading)
+                    state is MediaState.Failed -> state.message
+                    !connected -> getString(R.string.torrmedia_disconnected)
+                    else -> getString(R.string.no_torrents)
+                }
+            }.collect { emptyView?.text = it }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            model.mediaConnected.collect { connected ->
+                torrentAdapter?.setMediaStale(!connected)
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        (viewModel as TorrentsViewModel).setUpdate(true)
     }
 
     override fun onPause() {
@@ -92,19 +107,10 @@ class TorrentsFragment : TSFragment() {
     fun sort(mode: Boolean = sortMode) {
         val list = torrentAdapter!!.list
         if (list.size > 0) {
-            when (mode) {
-                false -> {
-                    torrentAdapter?.update(list.sortedBy { it.title })
-                    App.toast(R.string.sort_by_name)
-                }
-
-                true -> {
-                    torrentAdapter?.update(list.sortedByDescending { it.timestamp })
-                    App.toast(R.string.sort_by_date)
-                }
-            }
             sortMode = !mode
             Settings.set("sort_torrents", sortMode)
+            updateList()
+            App.toast(if (sortMode) R.string.sort_by_name else R.string.sort_by_date)
             activity?.findViewById<ListView>(R.id.lvTorrents)?.apply {
                 this.setSelection(0)
                 requestFocus()
@@ -113,53 +119,18 @@ class TorrentsFragment : TSFragment() {
     }
 
     suspend fun filter(cat: String = "") = withContext(Dispatchers.Main) {
-        val data = (viewModel as TorrentsViewModel).getData()
-        data.observe(this@TorrentsFragment) { list ->
-            val fltList = if (cat == "uncategorized")
-                list.filter { it.category.isNullOrBlank() }
-            else if (cat.isNotBlank())
-                list.filter { it.category?.contains(cat, true) == true }
-            else
-                list
-            torrentAdapter?.update(fltList)
-            if (fltList.isEmpty()) {
-                emptyView.visibility = View.VISIBLE
-            } else {
-                emptyView.visibility = View.GONE
-            }
-        }
+        category = cat
+        updateList()
     }
 
-    suspend fun start() = withContext(Dispatchers.Main) {
-        viewModel = ViewModelProvider(this@TorrentsFragment)[TorrentsViewModel::class.java]
-        val model = viewModel as TorrentsViewModel
-        val data = model.getData()
-        model.setUpdate(true)
-        mediaJob?.cancel()
-        mediaJob = viewLifecycleOwner.lifecycleScope.launch {
-            model.mediaState.combine(model.mediaConnected) { state, connected ->
-                when {
-                    state is MediaState.Loading -> getString(R.string.torrmedia_loading)
-                    state is MediaState.Failed -> state.message
-                    !connected -> getString(R.string.torrmedia_disconnected)
-                    else -> getString(R.string.no_torrents)
-                }
-            }.collect { emptyView.text = it }
+    private fun updateList() {
+        val query = view?.findViewById<EditText>(R.id.etSearch)?.text?.toString()?.trim().orEmpty()
+        val list = (viewModel as TorrentsViewModel).getData().value.orEmpty().filter {
+            (if (category == "uncategorized") it.category.isNullOrBlank()
+            else category.isBlank() || it.category?.contains(category, true) == true) &&
+                (query.isEmpty() || it.title.orEmpty().contains(query, true) || it.name.orEmpty().contains(query, true))
         }
-        stateJob?.cancel()
-        stateJob = viewLifecycleOwner.lifecycleScope.launch {
-            model.mediaConnected.collect { connected ->
-                torrentAdapter?.setMediaStale(!connected)
-            }
-        }
-        data.observe(this@TorrentsFragment) {
-            torrentAdapter?.update(it)
-            if (it.isEmpty()) {
-                emptyView.visibility = View.VISIBLE
-            } else {
-                emptyView.visibility = View.GONE
-            }
-        }
+        torrentAdapter?.update(if (sortMode) list.sortedBy { it.title } else list.sortedByDescending { it.timestamp })
     }
 
     fun onKeyUp(keyCode: Int): Boolean {

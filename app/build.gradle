@@ -20,8 +20,8 @@ android {
         //noinspection ExpiredTargetSdkVersion
         targetSdkVersion 28
         multiDexEnabled true
-        versionCode 143
-        versionName "MatriX.143"
+        versionCode 144
+        versionName "MatriX.144"
         // Use SupportLibrary for vectors
         vectorDrawables.useSupportLibrary = true
     }
@@ -58,6 +58,10 @@ android {
     buildFeatures {
         buildConfig true
     }
+}
+
+kotlin {
+    jvmToolchain(21)
 }
 
 base {
