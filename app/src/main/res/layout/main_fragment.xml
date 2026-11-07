@@ -23,7 +23,7 @@
             android:textAppearance="@style/TextAppearance.AppCompat.Medium" />
     </com.google.android.material.textfield.TextInputLayout>
 
-    <ListView
+    <ru.yourok.torrserve.ui.widgets.PatchedListView
         android:id="@+id/lvTorrents"
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -35,7 +35,7 @@
         android:requiresFadingEdge="vertical">
 
         <requestFocus />
-    </ListView>
+    </ru.yourok.torrserve.ui.widgets.PatchedListView>
 
     <TextView
         android:id="@+id/empty_view"

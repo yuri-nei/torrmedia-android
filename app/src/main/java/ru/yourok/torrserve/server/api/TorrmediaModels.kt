@@ -290,11 +290,16 @@ fun primaryTransferAction(actions: Set<ItemAction>): ItemAction? = when {
     else -> null
 }
 
-fun removalActions(actions: Set<ItemAction>): List<ItemAction> =
-    listOf(ItemAction.REMOVE, ItemAction.REMOVE_WITH_DATA).filter { it in actions }
-
 fun itemMenuActions(actions: Set<ItemAction>): List<ItemAction> =
-    listOf(ItemAction.RECHECK, ItemAction.DELETE_WATCHED).filter { it in actions }
+    listOf(ItemAction.RECHECK, ItemAction.REMOVE, ItemAction.REMOVE_WITH_DATA).filter { it in actions }
+
+fun nextEpisodeIndex(files: List<MediaFile>): Int {
+    val started = files.indexOfFirst { it.watch == WatchState.STARTED }
+    if (started >= 0)
+        return started
+    val untouched = files.indexOfFirst { it.watch == WatchState.NONE }
+    return if (untouched >= 0) untouched else 0
+}
 
 fun watchedToDelete(files: List<MediaFile>): Int =
     files.count { it.watch == WatchState.WATCHED && FileAction.DELETE in it.actions }

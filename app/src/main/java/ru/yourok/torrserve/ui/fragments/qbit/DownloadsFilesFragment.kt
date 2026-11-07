@@ -4,11 +4,15 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
+import android.text.SpannableStringBuilder
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.Animation
+import android.view.animation.AnimationUtils
 import android.widget.BaseAdapter
 import android.widget.Button
 import android.widget.ImageView
@@ -18,6 +22,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.view.ContextThemeWrapper
 import androidx.appcompat.widget.TooltipCompat
 import androidx.core.graphics.ColorUtils
+import androidx.core.view.isGone
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.progressindicator.LinearProgressIndicator
@@ -25,11 +30,14 @@ import com.google.android.material.shape.CornerFamily
 import com.google.android.material.shape.MaterialShapeDrawable
 import com.google.android.material.shape.ShapeAppearanceModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.yourok.torrserve.R
 import ru.yourok.torrserve.app.App
-import ru.yourok.torrserve.ext.append
+import ru.yourok.torrserve.ext.appendStyled
+import ru.yourok.torrserve.ext.setTextIfChanged
 import ru.yourok.torrserve.server.api.FileAction
 import ru.yourok.torrserve.server.api.FilePriority
 import ru.yourok.torrserve.server.api.FileStatus
@@ -44,13 +52,14 @@ import ru.yourok.torrserve.server.api.Operation
 import ru.yourok.torrserve.server.api.OperationState
 import ru.yourok.torrserve.server.api.fileMenuActions
 import ru.yourok.torrserve.server.api.itemMenuActions
+import ru.yourok.torrserve.server.api.nextEpisodeIndex
 import ru.yourok.torrserve.server.api.primaryTransferAction
-import ru.yourok.torrserve.server.api.removalActions
 import ru.yourok.torrserve.server.api.watchedToDelete
 import ru.yourok.torrserve.server.api.WatchState
 import ru.yourok.torrserve.settings.Settings
 import ru.yourok.torrserve.ui.dialogs.PlayersDialog
 import ru.yourok.torrserve.ui.fragments.TSFragment
+import ru.yourok.torrserve.ui.widgets.PatchedListView
 import ru.yourok.torrserve.utils.Format
 import ru.yourok.torrserve.utils.Mime
 import ru.yourok.torrserve.utils.ThemeUtil
@@ -60,12 +69,23 @@ import java.util.Locale
 class DownloadsFilesFragment : TSFragment() {
 
     companion object {
-        fun newInstance(item: String, title: String): DownloadsFilesFragment =
+        private const val RECONNECT_GRACE_MS = 2_000L
+
+        private const val ENTER_FALLBACK_MS = 1_000L
+
+        fun newInstance(
+            item: String,
+            title: String,
+            seed: Item? = null,
+            prewarm: DetailsPrewarm? = null,
+        ): DownloadsFilesFragment =
             DownloadsFilesFragment().apply {
                 arguments = Bundle().apply {
                     putString("item", item)
                     putString("title", title)
                 }
+                this.seed = seed
+                this.prewarm = prewarm
             }
     }
 
@@ -82,6 +102,25 @@ class DownloadsFilesFragment : TSFragment() {
     private var offline = false
     private var lastOpenAt = 0L
     private var focusApplied = false
+    private var filesShown = false
+    private var reconnectCheck: Job? = null
+
+    private var seed: Item? = null
+
+    private var prewarm: DetailsPrewarm? = null
+
+    private val colors by lazy { HeaderColors() }
+
+    private class HeaderColors {
+        private val themed = ContextThemeWrapper(App.context, ThemeUtil.selectedTheme)
+        private val bright = ThemeUtil.getColorFromAttr(themed, R.attr.colorBright)
+        val label = ColorUtils.setAlphaComponent(bright, 180)
+        val value = ColorUtils.setAlphaComponent(bright, 240)
+        val accent = ThemeUtil.getColorFromAttr(themed, R.attr.colorPrimary)
+    }
+
+    private var entering = false
+    private var renderDeferred = false
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -90,14 +129,56 @@ class DownloadsFilesFragment : TSFragment() {
         itemId = arguments?.getString("item") ?: ""
         itemTitle = arguments?.getString("title") ?: ""
         store = TorrmediaStore.item(itemId)
+        val warm = prewarm?.take(inflater)
+        prewarm = null
+        if (warm != null) {
+            filesAdapter.addSpareRows(warm.second)
+            return warm.first
+        }
         return inflater.inflate(R.layout.qbit_files_fragment, container, false)
+    }
+
+    override fun onCreateAnimation(transit: Int, enter: Boolean, nextAnim: Int): Animation? {
+        if (!enter || nextAnim == 0)
+            return null
+        val anim = AnimationUtils.loadAnimation(requireContext(), nextAnim)
+        entering = true
+        anim.setAnimationListener(object : Animation.AnimationListener {
+            override fun onAnimationStart(animation: Animation) {}
+            override fun onAnimationRepeat(animation: Animation) {}
+            override fun onAnimationEnd(animation: Animation) = finishEntering()
+        })
+        view?.postDelayed({ finishEntering() }, ENTER_FALLBACK_MS)
+        return anim
+    }
+
+    private fun finishEntering() {
+        if (!entering)
+            return
+        entering = false
+        if (renderDeferred) {
+            renderDeferred = false
+            render(store.state.value)
+        }
+    }
+
+    private fun holdFocus(root: View) {
+        if (root !is ViewGroup)
+            return
+        root.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+        root.isFocusable = true
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            root.defaultFocusHighlightEnabled = false
+        root.requestFocus()
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        focusApplied = false
+        filesShown = false
         view.findViewById<TextView>(R.id.tvQbitTorrTitle)?.text = itemTitle
-        view.findViewById<Button>(R.id.btnQbitDeleteTorrent)?.let {
-            TooltipCompat.setTooltipText(it, getString(R.string.torrmedia_action_remove))
+        view.findViewById<Button>(R.id.btnQbitDeleteWatched)?.let {
+            TooltipCompat.setTooltipText(it, getString(R.string.torrmedia_action_delete_watched))
         }
         view.findViewById<Button>(R.id.btnQbitMore)?.let {
             TooltipCompat.setTooltipText(it, getString(R.string.torrmedia_action_more))
@@ -112,6 +193,7 @@ class DownloadsFilesFragment : TSFragment() {
                 true
             }
         }
+        holdFocus(view)
 
         viewLifecycleOwner.lifecycleScope.launch {
             store.state.collect { render(it) }
@@ -123,28 +205,54 @@ class DownloadsFilesFragment : TSFragment() {
             store.connected.collect { live ->
                 val restored = offline && live
                 offline = !live
-                render(store.state.value)
+                if (live || isResumed)
+                    render(store.state.value)
                 if (restored)
                     reconcilePending()
             }
         }
+        store.start(viewLifecycleOwner.lifecycleScope)
     }
 
     override fun onResume() {
         super.onResume()
         store.start(viewLifecycleOwner.lifecycleScope)
+        reconnectCheck?.cancel()
+        reconnectCheck = viewLifecycleOwner.lifecycleScope.launch {
+            delay(RECONNECT_GRACE_MS)
+            if (offline && isResumed)
+                render(store.state.value)
+        }
     }
 
     override fun onPause() {
+        reconnectCheck?.cancel()
         store.stop()
         super.onPause()
+    }
+
+    override fun onDestroyView() {
+        seed = null
+        prewarm = null
+        entering = false
+        renderDeferred = false
+        super.onDestroyView()
     }
 
 
     private fun render(state: MediaState<Item>) {
         val vi = view ?: return
+        if (entering) {
+            renderDeferred = true
+            return
+        }
         when (state) {
             is MediaState.Loading -> {
+                val early = seed
+                if (early != null) {
+                    renderItem(vi, early, preview = true)
+                    return
+                }
                 filesAdapter.update(emptyList())
                 showStatus(getString(R.string.torrmedia_loading))
                 hideControls(vi)
@@ -165,38 +273,51 @@ class DownloadsFilesFragment : TSFragment() {
                 }
             }
 
-            is MediaState.Ready -> renderItem(vi, state.data)
+            is MediaState.Ready -> {
+                seed = null
+                renderItem(vi, state.data)
+            }
         }
+    }
+
+    private fun View.hideKeepingFocus(vi: View, files: List<MediaFile>) {
+        if (isGone)
+            return
+        if (hasFocus()) {
+            val list = vi.findViewById<PatchedListView>(R.id.lvQbitFiles)
+            if (list != null && list.requestFocus() && files.isNotEmpty())
+                list.setSelectionShowingPrevious(nextEpisodeIndex(files))
+        }
+        visibility = View.GONE
     }
 
     private fun hideControls(vi: View) {
         vi.findViewById<LinearProgressIndicator>(R.id.pbQbitProgress)?.visibility = View.GONE
-        vi.findViewById<View>(R.id.btnQbitTransfer)?.visibility = View.GONE
-        vi.findViewById<View>(R.id.btnQbitDeleteTorrent)?.visibility = View.GONE
-        vi.findViewById<View>(R.id.btnQbitMore)?.visibility = View.GONE
+        for (id in intArrayOf(R.id.btnQbitTransfer, R.id.btnQbitDeleteWatched, R.id.btnQbitMore))
+            vi.findViewById<View>(id)?.hideKeepingFocus(vi, emptyList())
         for (id in intArrayOf(R.id.tvQbitSpeed, R.id.tvQbitSeeds, R.id.tvQbitPeers, R.id.tvQbitEta, R.id.tvQbitCategory, R.id.tvQbitAdded))
             vi.findViewById<View>(id)?.visibility = View.GONE
     }
 
     private fun showStatus(text: String) {
-        val themedContext = ContextThemeWrapper(App.context, ThemeUtil.selectedTheme)
-        val accentColor = ThemeUtil.getColorFromAttr(themedContext, R.attr.colorPrimary)
-        view?.findViewById<TextView>(R.id.tvQbitSummary)?.apply {
-            this.text = ""
-            append(text, accentColor, true)
-        }
+        view?.findViewById<TextView>(R.id.tvQbitSummary)
+            ?.setTextIfChanged(SpannableStringBuilder().appendStyled(text, colors.accent, bold = true))
     }
 
-    private fun renderItem(vi: View, item: Item) {
+    private fun renderItem(vi: View, item: Item, preview: Boolean = false) {
         val files = item.files ?: emptyList()
         filesAdapter.update(files)
+        if (files.isNotEmpty() && !filesShown) {
+            filesShown = true
+            vi.findViewById<View>(R.id.lvQbitFiles)?.apply {
+                alpha = 0f
+                animate().alpha(1f).setDuration(150).start()
+            }
+        }
         if (item.title.isNotBlank())
-            vi.findViewById<TextView>(R.id.tvQbitTorrTitle)?.text = item.title
+            vi.findViewById<TextView>(R.id.tvQbitTorrTitle)?.setTextIfChanged(item.title)
 
-        val themedContext = ContextThemeWrapper(App.context, ThemeUtil.selectedTheme)
-        val labelColor = ColorUtils.setAlphaComponent(ThemeUtil.getColorFromAttr(themedContext, R.attr.colorBright), 180)
-        val valueColor = ColorUtils.setAlphaComponent(ThemeUtil.getColorFromAttr(themedContext, R.attr.colorBright), 240)
-        val accentColor = ThemeUtil.getColorFromAttr(themedContext, R.attr.colorPrimary)
+        val colors = colors
 
         fun chip(id: Int, label: String, value: String?) {
             vi.findViewById<TextView>(id)?.apply {
@@ -205,38 +326,39 @@ class DownloadsFilesFragment : TSFragment() {
                     return@apply
                 }
                 visibility = View.VISIBLE
-                text = ""
-                append("$label ", labelColor)
-                append(value, valueColor, true)
+                setTextIfChanged(
+                    SpannableStringBuilder()
+                        .appendStyled("$label ", colors.label)
+                        .appendStyled(value, colors.value, bold = true)
+                )
             }
         }
 
         val pct = (item.progress * 100).toInt().coerceIn(0, 100)
         val running = pct < 100 || item.status == ItemStatus.CHECKING
-        vi.findViewById<TextView>(R.id.tvQbitSummary)?.apply {
-            text = ""
-            if (offline)
-                append(getString(R.string.torrmedia_disconnected).uppercase(Locale.getDefault()) + " · ", labelColor, true)
-            append(itemStatusLabel(item.status).uppercase(Locale.getDefault()), accentColor, true)
-            if (phase.isNotEmpty())
-                append(" · $phase", accentColor)
-            if (running) {
-                val pctText = if (pct >= 99 && item.progress < 1.0) "%.1f%%".format(item.progress * 100) else "$pct%"
-                append(" · $pctText", valueColor, true)
-            }
-            append(" · ", labelColor)
-            append(
-                if (running) "${Format.byteFmt(item.downloaded)} / ${Format.byteFmt(item.size)}"
-                else Format.byteFmt(item.size),
-                valueColor, true
-            )
-            append(" · ", labelColor)
-            append(getString(R.string.qbit_files_fmt, item.filesReady, item.filesTotal), valueColor)
+        val summary = SpannableStringBuilder()
+        if (offline && !preview)
+            summary.appendStyled(getString(R.string.torrmedia_disconnected).uppercase(Locale.getDefault()) + " · ", colors.label, bold = true)
+        summary.appendStyled(itemStatusLabel(item.status).uppercase(Locale.getDefault()), colors.accent, bold = true)
+        if (phase.isNotEmpty())
+            summary.appendStyled(" · $phase", colors.accent)
+        if (running) {
+            val pctText = if (pct >= 99 && item.progress < 1.0) "%.1f%%".format(item.progress * 100) else "$pct%"
+            summary.appendStyled(" · $pctText", colors.value, bold = true)
         }
+        summary.appendStyled(" · ", colors.label)
+        summary.appendStyled(
+            if (running) "${Format.byteFmt(item.downloaded)} / ${Format.byteFmt(item.size)}"
+            else Format.byteFmt(item.size),
+            colors.value, bold = true
+        )
+        summary.appendStyled(" · ", colors.label)
+        summary.appendStyled(getString(R.string.qbit_files_fmt, item.filesReady, item.filesTotal), colors.value)
+        vi.findViewById<TextView>(R.id.tvQbitSummary)?.setTextIfChanged(summary)
         vi.findViewById<LinearProgressIndicator>(R.id.pbQbitProgress)?.apply {
             if (running) {
                 visibility = View.VISIBLE
-                setIndicatorColor(accentColor)
+                setIndicatorColor(colors.accent)
                 setProgressCompat(pct, true)
             } else
                 visibility = View.GONE
@@ -257,12 +379,16 @@ class DownloadsFilesFragment : TSFragment() {
         vi.findViewById<MaterialButton>(R.id.btnQbitTransfer)?.apply {
             val action = primaryTransferAction(item.actions)
             if (action == null) {
-                visibility = View.GONE
+                hideKeepingFocus(vi, files)
                 setOnClickListener(null)
             } else {
                 visibility = View.VISIBLE
-                text = itemActionLabel(action)
-                setIconResource(if (action == ItemAction.START) R.drawable.ic_qbit_resume else R.drawable.ic_qbit_pause)
+                setTextIfChanged(itemActionLabel(action))
+                val icon = if (action == ItemAction.START) R.drawable.ic_qbit_resume else R.drawable.ic_qbit_pause
+                if (getTag(R.id.btnQbitTransfer) != icon) {
+                    setIconResource(icon)
+                    setTag(R.id.btnQbitTransfer, icon)
+                }
                 setOnClickListener {
                     runOperation(OpKind.GENERIC) {
                         if (action == ItemAction.START) TorrmediaApi.startItem(itemId)
@@ -271,36 +397,41 @@ class DownloadsFilesFragment : TSFragment() {
                 }
             }
         }
-        vi.findViewById<MaterialButton>(R.id.btnQbitDeleteTorrent)?.apply {
-            val removals = removalActions(item.actions)
-            if (removals.isEmpty()) {
-                visibility = View.GONE
+        vi.findViewById<MaterialButton>(R.id.btnQbitDeleteWatched)?.apply {
+            if (ItemAction.DELETE_WATCHED !in item.actions) {
+                hideKeepingFocus(vi, files)
                 setOnClickListener(null)
             } else {
                 visibility = View.VISIBLE
-                setOnClickListener { confirmRemove(removals) }
+                val count = watchedToDelete(files)
+                val label = if (count > 0) count.toString() else ""
+                if (text.toString() != label) {
+                    text = label
+                    iconPadding = if (count > 0) Format.dp2px(6.0f) else 0
+                }
+                setOnClickListener { confirmDeleteWatched() }
             }
         }
         vi.findViewById<MaterialButton>(R.id.btnQbitMore)?.apply {
             val menu = itemMenuActions(item.actions)
             if (menu.isEmpty()) {
-                visibility = View.GONE
+                hideKeepingFocus(vi, files)
                 setOnClickListener(null)
             } else {
                 visibility = View.VISIBLE
                 setOnClickListener { showItemMenu(menu) }
             }
         }
+        for (id in intArrayOf(R.id.btnQbitTransfer, R.id.btnQbitDeleteWatched, R.id.btnQbitMore))
+            vi.findViewById<View>(id)?.isFocusable = !preview
 
         if (!focusApplied && files.isNotEmpty()) {
-            val started = files.indexOfFirst { it.watch == WatchState.STARTED }
-            val untouched = files.indexOfFirst { it.watch == WatchState.NONE }
-            val position = when {
-                started >= 0 -> started
-                untouched >= 0 -> untouched
-                else -> 0
+            vi.findViewById<PatchedListView>(R.id.lvQbitFiles)?.let { list ->
+                val focused = vi.findFocus()
+                if (focused == null || focused === vi)
+                    list.requestFocus()
+                list.setSelectionShowingPrevious(nextEpisodeIndex(files))
             }
-            vi.findViewById<ListView>(R.id.lvQbitFiles)?.setSelection(position)
             focusApplied = true
         }
     }
@@ -334,13 +465,13 @@ class DownloadsFilesFragment : TSFragment() {
     private fun runItemAction(action: ItemAction) {
         when (action) {
             ItemAction.RECHECK -> runOperation(OpKind.GENERIC) { TorrmediaApi.recheckItem(itemId) }
-            ItemAction.DELETE_WATCHED -> confirmDeleteWatched()
+            ItemAction.REMOVE, ItemAction.REMOVE_WITH_DATA -> confirmRemove(action)
             else -> App.toast(R.string.torrmedia_action_unavailable, true)
         }
     }
 
     private fun confirmDeleteWatched() {
-        val files = (store.state.value as? MediaState.Ready)?.data?.files.orEmpty()
+        val files = (store.state.value as? MediaState.Ready)?.data?.files ?: return
         AlertDialog.Builder(requireContext())
             .setTitle(R.string.torrmedia_action_delete_watched)
             .setMessage(getString(R.string.torrmedia_delete_watched_confirm, watchedToDelete(files)))
@@ -402,21 +533,12 @@ class DownloadsFilesFragment : TSFragment() {
             .show()
     }
 
-    private fun confirmRemove(removals: List<ItemAction>) {
-        if (removals.size == 1) {
-            val action = removals[0]
-            AlertDialog.Builder(requireContext())
-                .setTitle(itemActionLabel(action))
-                .setMessage(if (action == ItemAction.REMOVE_WITH_DATA) R.string.torrmedia_remove_with_data_confirm else R.string.torrmedia_remove_confirm)
-                .setPositiveButton(android.R.string.ok) { _, _ -> remove(action) }
-                .setNegativeButton(android.R.string.cancel, null)
-                .show()
-            return
-        }
-        val titles = removals.map { itemActionLabel(it) }.toTypedArray()
+    private fun confirmRemove(action: ItemAction) {
         AlertDialog.Builder(requireContext())
-            .setTitle(R.string.torrmedia_action_remove)
-            .setItems(titles) { _, which -> confirmRemove(listOf(removals[which])) }
+            .setTitle(itemActionLabel(action))
+            .setMessage(if (action == ItemAction.REMOVE_WITH_DATA) R.string.torrmedia_remove_with_data_confirm else R.string.torrmedia_remove_confirm)
+            .setPositiveButton(android.R.string.ok) { _, _ -> remove(action) }
+            .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 
@@ -552,6 +674,26 @@ class DownloadsFilesFragment : TSFragment() {
     private class FilesAdapter : BaseAdapter() {
         private var rows: List<MediaFile> = emptyList()
 
+        private val spareRows = ArrayDeque<View>()
+
+        fun addSpareRows(views: List<View>) {
+            spareRows.addAll(views)
+        }
+
+        private val style by lazy { RowStyle() }
+
+        private class RowStyle {
+            private val themed = ContextThemeWrapper(App.context, ThemeUtil.selectedTheme)
+            val colorBright = ThemeUtil.getColorFromAttr(themed, R.attr.colorBright)
+            val nameColor = ColorUtils.setAlphaComponent(colorBright, 250)
+            val colorDone = ThemeUtil.getColorFromAttr(themed, R.attr.colorDone)
+            val chipText = ThemeUtil.getColorFromAttr(themed, R.attr.colorSurface)
+            val chipShape: ShapeAppearanceModel = ShapeAppearanceModel()
+                .toBuilder()
+                .setAllCorners(CornerFamily.ROUNDED, Format.dp2px(2.0f).toFloat())
+                .build()
+        }
+
         @SuppressLint("NotifyDataSetChanged")
         fun update(list: List<MediaFile>) {
             if (rows != list) {
@@ -562,34 +704,24 @@ class DownloadsFilesFragment : TSFragment() {
 
         @SuppressLint("SetTextI18n")
         override fun getView(position: Int, view: View?, parent: ViewGroup?): View {
-            val vi = view ?: LayoutInflater.from(parent?.context).inflate(R.layout.qbit_files_item, parent, false)
+            val vi = view ?: spareRows.removeFirstOrNull()
+                ?: LayoutInflater.from(parent?.context).inflate(R.layout.qbit_files_item, parent, false)
             val row = rows[position]
+            val style = style
 
             // styled after TorrentFilesAdapter: bright file name, chip-shaped size label
-            val themedContext = ContextThemeWrapper(App.context, ThemeUtil.selectedTheme)
-            val colorBright = ThemeUtil.getColorFromAttr(themedContext, R.attr.colorBright)
-            val nameColor = ColorUtils.setAlphaComponent(colorBright, 250)
-            val radius = Format.dp2px(2.0f).toFloat()
-            val shapeAppearanceModel = ShapeAppearanceModel()
-                .toBuilder()
-                .setAllCorners(CornerFamily.ROUNDED, radius)
-                .build()
-
             vi.findViewById<TextView>(R.id.tvFileName)?.apply {
-                text = ""
-                append(row.name, nameColor)
+                setTextIfChanged(row.name)
+                setTextColor(style.nameColor)
             }
             vi.findViewById<ImageView>(R.id.ivViewed)?.apply {
                 visibility = if (row.watch == WatchState.NONE) View.GONE else View.VISIBLE
                 alpha = if (row.watch == WatchState.STARTED) 0.45f else 1.0f
             }
-            val chipColor = if (row.status == FileStatus.READY)
-                ThemeUtil.getColorFromAttr(themedContext, R.attr.colorDone)
-            else
-                colorBright
+            val chipColor = if (row.status == FileStatus.READY) style.colorDone else style.colorBright
             vi.findViewById<TextView>(R.id.tvFileSize)?.apply {
                 val size = Format.byteFmt(row.size)
-                text = when (row.status) {
+                setTextIfChanged(when (row.status) {
                     FileStatus.READY -> {
                         val resume = if (row.watch == WatchState.STARTED && row.size > 0 && row.position > 0) {
                             val percent = (row.position.toDouble() * 100 / row.size.toDouble()).toInt().coerceIn(1, 99)
@@ -603,12 +735,15 @@ class DownloadsFilesFragment : TSFragment() {
                 } + when (row.status) {
                     FileStatus.READY -> ""
                     else -> row.priority?.takeIf { it != FilePriority.NORMAL }?.let { " ● ${filePriorityLabel(it)}" } ?: ""
+                })
+                if (getTag(R.id.tvFileSize) != chipColor) {
+                    background = MaterialShapeDrawable(style.chipShape).apply {
+                        fillColor = ColorStateList.valueOf(chipColor).withAlpha(240)
+                        setStroke(2.0f, ColorStateList.valueOf(chipColor).withAlpha(255))
+                    }
+                    setTag(R.id.tvFileSize, chipColor)
+                    setTextColor(style.chipText)
                 }
-                val shapeDrawable = MaterialShapeDrawable(shapeAppearanceModel)
-                shapeDrawable.fillColor = ColorStateList.valueOf(chipColor).withAlpha(240)
-                shapeDrawable.setStroke(2.0f, ColorStateList.valueOf(chipColor).withAlpha(255))
-                background = shapeDrawable
-                setTextColor(ThemeUtil.getColorFromAttr(themedContext, R.attr.colorSurface))
             }
             vi.alpha = when (row.status) {
                 FileStatus.READY -> 1.0f

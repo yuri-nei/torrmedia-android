@@ -135,7 +135,7 @@
             android:text="@android:string/cancel" />
     </LinearLayout>
 
-    <ListView
+    <ru.yourok.torrserve.ui.widgets.PatchedListView
         android:id="@+id/lvAddFiles"
         android:layout_width="match_parent"
         android:layout_height="match_parent"

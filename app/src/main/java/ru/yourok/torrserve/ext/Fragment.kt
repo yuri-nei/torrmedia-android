@@ -3,14 +3,15 @@ package ru.yourok.torrserve.ext
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import androidx.fragment.app.FragmentTransaction
+import ru.yourok.torrserve.R
 
 fun FragmentActivity.commitFragment(block: FragmentTransaction.() -> Unit) {
     val transact = supportFragmentManager.beginTransaction()
         .setCustomAnimations(
-            android.R.anim.fade_in,
-            android.R.anim.fade_out,
-            android.R.anim.fade_in,
-            android.R.anim.fade_out
+            R.anim.screen_enter,
+            R.anim.screen_exit,
+            R.anim.screen_enter,
+            R.anim.screen_exit
         )
     block(transact)
     // experimental, to avoid frequent FCs in TSFragment

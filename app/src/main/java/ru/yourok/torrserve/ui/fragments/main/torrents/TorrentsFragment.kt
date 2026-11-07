@@ -7,6 +7,8 @@ import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.Animation
+import android.view.animation.AnimationUtils
 import android.widget.EditText
 import android.widget.ListView
 import android.widget.TextView
@@ -25,7 +27,9 @@ import ru.yourok.torrserve.server.models.torrent.Torrent
 import ru.yourok.torrserve.settings.Settings
 import ru.yourok.torrserve.ui.activities.play.PlayActivity
 import ru.yourok.torrserve.ui.fragments.TSFragment
+import ru.yourok.torrserve.ui.fragments.qbit.DetailsPrewarm
 import ru.yourok.torrserve.ui.fragments.qbit.DownloadsFilesFragment
+import ru.yourok.torrserve.ui.widgets.PatchedListView
 import ru.yourok.torrserve.utils.TorrentHelper
 
 
@@ -35,10 +39,23 @@ class TorrentsFragment : TSFragment() {
     private var sortMode: Boolean = Settings.sortTorrByTitle
     private var category = ""
 
+    private var lastOpened: String? = null
+
+    private var focusPlaced = false
+
+    private var prewarm: DetailsPrewarm? = null
+
+    private var retainedView: View? = null
+
+    private var entering = false
+    private var listDeferred = false
+    private var staleDeferred: Boolean? = null
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
+        retainedView?.takeIf { it.parent == null }?.let { return it }
         val vi = inflater.inflate(R.layout.main_fragment, container, false)
         torrentAdapter = TorrentsAdapter(requireActivity())
         vi.findViewById<ListView>(R.id.lvTorrents)?.let { lvTorrents ->
@@ -46,8 +63,12 @@ class TorrentsFragment : TSFragment() {
             lvTorrents.emptyView = vi.findViewById(R.id.empty_view)
             lvTorrents.setOnItemClickListener { _, _, i, _ ->
                 val torr = torrentAdapter?.getItem(i) as Torrent
+                lastOpened = torr.hash
                 if (torr.src == "torrmedia") {
-                    DownloadsFilesFragment.newInstance(torr.hash, torr.title.ifBlank { torr.name })
+                    val seed = (viewModel as? TorrentsViewModel)?.liveItem(torr.hash)
+                    val warm = prewarm
+                    prewarm = null
+                    DownloadsFilesFragment.newInstance(torr.hash, torr.title.ifBlank { torr.name }, seed, warm)
                         .show(requireActivity(), R.id.container, true)
                     return@setOnItemClickListener
                 }
@@ -64,16 +85,45 @@ class TorrentsFragment : TSFragment() {
             lvTorrents.choiceMode = ListView.CHOICE_MODE_MULTIPLE_MODAL
             lvTorrents.setMultiChoiceModeListener(TorrentsActionBar(lvTorrents))
         }
+        vi.findViewById<EditText>(R.id.etSearch)?.doAfterTextChanged { updateList() }
+        retainedView = vi
         return vi
+    }
+
+
+    override fun onCreateAnimation(transit: Int, enter: Boolean, nextAnim: Int): Animation? {
+        if (!enter || nextAnim == 0)
+            return null
+        val anim = AnimationUtils.loadAnimation(requireContext(), nextAnim)
+        entering = true
+        anim.setAnimationListener(object : Animation.AnimationListener {
+            override fun onAnimationStart(animation: Animation) {}
+            override fun onAnimationRepeat(animation: Animation) {}
+            override fun onAnimationEnd(animation: Animation) = finishEntering()
+        })
+        view?.postDelayed({ finishEntering() }, ENTER_FALLBACK_MS)
+        return anim
+    }
+
+    private fun finishEntering() {
+        if (!entering)
+            return
+        entering = false
+        staleDeferred?.let { torrentAdapter?.setMediaStale(it) }
+        staleDeferred = null
+        if (listDeferred) {
+            listDeferred = false
+            updateList()
+        }
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        focusPlaced = false
         category = arguments?.getString("category") ?: ""
         viewModel = ViewModelProvider(this)[TorrentsViewModel::class.java]
         val model = viewModel as TorrentsViewModel
         model.getData().observe(viewLifecycleOwner) { updateList() }
-        view.findViewById<EditText>(R.id.etSearch).doAfterTextChanged { updateList() }
 
         val emptyView = view.findViewById<TextView>(R.id.empty_view)
         viewLifecycleOwner.lifecycleScope.launch {
@@ -88,7 +138,10 @@ class TorrentsFragment : TSFragment() {
         }
         viewLifecycleOwner.lifecycleScope.launch {
             model.mediaConnected.collect { connected ->
-                torrentAdapter?.setMediaStale(!connected)
+                if (entering)
+                    staleDeferred = !connected
+                else
+                    torrentAdapter?.setMediaStale(!connected)
             }
         }
     }
@@ -124,13 +177,63 @@ class TorrentsFragment : TSFragment() {
     }
 
     private fun updateList() {
+        if (entering && torrentAdapter?.list?.isNotEmpty() == true) {
+            listDeferred = true
+            return
+        }
         val query = view?.findViewById<EditText>(R.id.etSearch)?.text?.toString()?.trim().orEmpty()
-        val list = (viewModel as TorrentsViewModel).getData().value.orEmpty().filter {
-            (if (category == "uncategorized") it.category.isNullOrBlank()
-            else category.isBlank() || it.category?.contains(category, true) == true) &&
-                (query.isEmpty() || it.title.orEmpty().contains(query, true) || it.name.orEmpty().contains(query, true))
+        val inCategory = (viewModel as TorrentsViewModel).getData().value.orEmpty().filter {
+            if (category == "uncategorized") it.category.isNullOrBlank()
+            else category.isBlank() || it.category?.contains(category, true) == true
+        }
+        val list = inCategory.filter {
+            query.isEmpty() || it.title.orEmpty().contains(query, true) || it.name.orEmpty().contains(query, true)
         }
         torrentAdapter?.update(if (sortMode) list.sortedBy { it.title } else list.sortedByDescending { it.timestamp })
+        placeInitialFocus()
+        schedulePrewarm()
+    }
+
+    private fun schedulePrewarm() {
+        if (prewarm != null)
+            return
+        val vi = view ?: return
+        if (torrentAdapter?.list.orEmpty().none { it.src == "torrmedia" })
+            return
+        val container = activity?.findViewById<ViewGroup>(R.id.container) ?: return
+        val warm = DetailsPrewarm(requireActivity().layoutInflater, container)
+        prewarm = warm
+        vi.postDelayed({ if (prewarm === warm) warm.start() }, 500)
+    }
+
+    override fun onDestroyView() {
+        prewarm?.cancel()
+        prewarm = null
+        entering = false
+        listDeferred = false
+        staleDeferred = null
+        super.onDestroyView()
+    }
+
+    companion object {
+        private const val ENTER_FALLBACK_MS = 1_000L
+    }
+
+    private fun placeInitialFocus() {
+        if (focusPlaced)
+            return
+        val vi = view ?: return
+        val items = torrentAdapter?.list.orEmpty()
+        if (items.isEmpty())
+            return
+        focusPlaced = true
+        if (vi.findFocus() != null)
+            return
+        val list = vi.findViewById<PatchedListView>(R.id.lvTorrents) ?: return
+        if (!list.requestFocus())
+            return
+        val index = lastOpened?.let { hash -> items.indexOfFirst { it.hash == hash } } ?: -1
+        list.setSelectionShowingPrevious(index.coerceAtLeast(0))
     }
 
     fun onKeyUp(keyCode: Int): Boolean {

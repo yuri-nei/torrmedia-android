@@ -6,6 +6,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +21,8 @@ import ru.yourok.torrserve.server.api.MediaState
 import ru.yourok.torrserve.server.api.TorrmediaStore
 import ru.yourok.torrserve.server.models.torrent.Torrent
 
+private const val STREAM_LINGER_MS = 30_000L
+
 class TorrentsViewModel : ViewModel() {
 
     private val store = TorrmediaStore.items()
@@ -28,6 +31,12 @@ class TorrentsViewModel : ViewModel() {
     val mediaState: StateFlow<MediaState<ItemsSnapshot>> get() = store.state
 
     val mediaConnected: StateFlow<Boolean> get() = store.connected
+
+    fun liveItem(id: String): Item? {
+        if (!store.connected.value)
+            return null
+        return (store.state.value as? MediaState.Ready)?.data?.items?.firstOrNull { it.id == id }
+    }
 
     var data: MutableLiveData<List<Torrent>>? = null
     private var isUpdate = true
@@ -40,12 +49,19 @@ class TorrentsViewModel : ViewModel() {
         return data!!
     }
 
+    private var linger: Job? = null
+
     fun setUpdate(update: Boolean) {
         isUpdate = update
+        linger?.cancel()
+        linger = null
         if (update)
             store.start(viewModelScope)
         else
-            store.stop()
+            linger = viewModelScope.launch {
+                delay(STREAM_LINGER_MS)
+                store.stop()
+            }
     }
 
     override fun onCleared() {

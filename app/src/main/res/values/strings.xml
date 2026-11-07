@@ -373,7 +373,7 @@
     <string name="torrmedia_action_recheck">Recheck data</string>
     <string name="torrmedia_action_delete_watched">Delete watched episodes</string>
     <string name="torrmedia_action_more">More</string>
-    <string name="torrmedia_action_remove">Remove torrent</string>
+    <string name="torrmedia_action_remove">Remove torrent, keep files</string>
     <string name="torrmedia_action_remove_with_data">Remove with data</string>
     <string name="torrmedia_action_play">Play</string>
     <string name="torrmedia_action_delete">Delete episode</string>
@@ -394,7 +394,7 @@
     <string name="torrmedia_action_set_viewed">Mark as watched</string>
     <string name="torrmedia_action_clear_viewed">Remove watch mark</string>
     <string name="torrmedia_action_unavailable">The server does not allow this action right now</string>
-    <string name="torrmedia_remove_confirm">The torrent will be removed, the files on disk will stay</string>
+    <string name="torrmedia_remove_confirm">The episodes stay on the server: you can still watch and delete them, and deleting becomes instant. Missing ones can no longer be downloaded</string>
     <string name="torrmedia_remove_with_data_confirm">The torrent and its files on the server will be deleted</string>
     <string name="torrmedia_delete_watched_confirm">Episodes to delete: %1$d. Unwatched ones stay on the server</string>
     <string name="torrmedia_phase_waiting">waiting</string>

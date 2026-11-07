@@ -233,18 +233,15 @@ class TorrmediaModelsTest {
     fun `action missing from actions is never offered`() {
         val downloading = setOf(ItemAction.STOP, ItemAction.RECHECK)
         assertEquals(ItemAction.STOP, primaryTransferAction(downloading))
-        assertEquals(emptyList<ItemAction>(), removalActions(downloading))
         assertEquals(listOf(ItemAction.RECHECK), itemMenuActions(downloading))
 
         val checking = emptySet<ItemAction>()
         assertNull(primaryTransferAction(checking))
-        assertEquals(emptyList<ItemAction>(), removalActions(checking))
         assertEquals(emptyList<ItemAction>(), itemMenuActions(checking))
 
         val stopped = setOf(ItemAction.START, ItemAction.REMOVE, ItemAction.REMOVE_WITH_DATA)
         assertEquals(ItemAction.START, primaryTransferAction(stopped))
-        assertEquals(listOf(ItemAction.REMOVE, ItemAction.REMOVE_WITH_DATA), removalActions(stopped))
-        assertEquals(emptyList<ItemAction>(), itemMenuActions(stopped))
+        assertEquals(listOf(ItemAction.REMOVE, ItemAction.REMOVE_WITH_DATA), itemMenuActions(stopped))
 
         assertEquals(emptyList<FileAction>(), fileMenuActions(setOf(FileAction.PLAY)))
         assertEquals(
@@ -253,8 +250,13 @@ class TorrmediaModelsTest {
         )
 
         assertEquals(
-            listOf(ItemAction.RECHECK, ItemAction.DELETE_WATCHED),
-            itemMenuActions(setOf(ItemAction.STOP, ItemAction.RECHECK, ItemAction.DELETE_WATCHED))
+            listOf(ItemAction.RECHECK, ItemAction.REMOVE, ItemAction.REMOVE_WITH_DATA),
+            itemMenuActions(
+                setOf(
+                    ItemAction.REMOVE_WITH_DATA, ItemAction.DELETE_WATCHED, ItemAction.STOP,
+                    ItemAction.REMOVE, ItemAction.RECHECK,
+                )
+            )
         )
     }
 
@@ -274,11 +276,26 @@ class TorrmediaModelsTest {
     }
 
     @Test
+    fun `next episode is the started one, else the first untouched`() {
+        fun files(vararg watch: String?): List<MediaFile> {
+            val rows = watch.mapIndexed { i, w ->
+                if (w == null) """{"id":"$i"}""" else """{"id":"$i","watch":"$w"}"""
+            }
+            return parseItem("""{"id":"p:abc","files":[${rows.joinToString(",")}]}""").files.orEmpty()
+        }
+
+        assertEquals(2, nextEpisodeIndex(files("watched", "watched", null, null)))
+        assertEquals(3, nextEpisodeIndex(files("watched", null, null, "started")))
+        assertEquals(0, nextEpisodeIndex(files("watched", "watched")))
+        assertEquals(0, nextEpisodeIndex(emptyList()))
+    }
+
+    @Test
     fun `unknown status offers nothing on its own`() {
         val item = parseItem("""{"id":"p:abc","status":"unknown","actions":[]}""")
         assertEquals(ItemStatus.UNKNOWN, item.status)
         assertNull(primaryTransferAction(item.actions))
-        assertTrue(removalActions(item.actions).isEmpty())
+        assertTrue(itemMenuActions(item.actions).isEmpty())
     }
 
     @Test

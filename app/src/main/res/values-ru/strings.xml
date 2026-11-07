@@ -310,7 +310,7 @@
     <string name="torrmedia_action_recheck">Проверить данные</string>
     <string name="torrmedia_action_delete_watched">Удалить просмотренные</string>
     <string name="torrmedia_action_more">Ещё</string>
-    <string name="torrmedia_action_remove">Снять раздачу</string>
+    <string name="torrmedia_action_remove">Убрать торрент, оставить файлы</string>
     <string name="torrmedia_action_remove_with_data">Удалить вместе с файлами</string>
     <string name="torrmedia_action_play">Смотреть</string>
     <string name="torrmedia_action_delete">Удалить серию</string>
@@ -331,7 +331,7 @@
     <string name="torrmedia_action_set_viewed">Отметить просмотренной</string>
     <string name="torrmedia_action_clear_viewed">Снять отметку</string>
     <string name="torrmedia_action_unavailable">Сервер сейчас не разрешает это действие</string>
-    <string name="torrmedia_remove_confirm">Раздача будет снята, файлы на диске останутся</string>
+    <string name="torrmedia_remove_confirm">Серии останутся на сервере: смотреть и удалять их можно, и удаление станет мгновенным. Докачать недостающие будет нельзя</string>
     <string name="torrmedia_remove_with_data_confirm">Раздача и её файлы на сервере будут удалены</string>
     <string name="torrmedia_delete_watched_confirm">Будет удалено серий: %1$d. Недосмотренные останутся на сервере</string>
     <string name="torrmedia_phase_waiting">ожидание</string>

@@ -17,6 +17,7 @@ import com.bumptech.glide.load.resource.bitmap.BitmapTransitionOptions
 import com.bumptech.glide.load.resource.bitmap.RoundedCorners
 import com.bumptech.glide.request.RequestOptions
 import ru.yourok.torrserve.R
+import ru.yourok.torrserve.ext.setTextIfChanged
 import ru.yourok.torrserve.server.models.torrent.Torrent
 import ru.yourok.torrserve.ui.fragments.qbit.mediaListSummary
 import ru.yourok.torrserve.settings.Settings
@@ -39,6 +40,9 @@ class TorrentsAdapter(private val activity: FragmentActivity) : BaseAdapter() {
     }
 
     fun isStale(torrent: Torrent): Boolean = mediaStale && torrent.src == "torrmedia"
+
+    private val dateText = HashMap<Long, String>()
+    private val sizeText = HashMap<Long, String>()
 
     fun update(list: List<Torrent>) {
         if (this.list.size != list.size) {
@@ -70,15 +74,21 @@ class TorrentsAdapter(private val activity: FragmentActivity) : BaseAdapter() {
         var addStr = ""
 
         if (addTime > 0)
-            addStr = Format.sDateFmt(addTime)
+            addStr = dateText.getOrPut(addTime) { Format.sDateFmt(addTime) }
 
         if (title.isBlank())
             title = list[position].name
 
-        vi.findViewById<ImageView>(R.id.ivPoster)?.visibility = View.GONE
-        if (!poster.isNullOrBlank() && Settings.showCover())
-            vi.findViewById<ImageView>(R.id.ivPoster)?.let {
+        val ivPoster = vi.findViewById<ImageView>(R.id.ivPoster)
+        if (poster.isNullOrBlank() || !Settings.showCover()) {
+            ivPoster?.visibility = View.GONE
+            ivPoster?.setTag(R.id.ivPoster, null)
+        } else
+            ivPoster?.let {
                 it.visibility = View.VISIBLE
+                if (it.getTag(R.id.ivPoster) == poster)
+                    return@let
+                it.setTag(R.id.ivPoster, poster)
                 Glide.with(activity)
                     .asBitmap()
                     .load(poster)
@@ -89,7 +99,11 @@ class TorrentsAdapter(private val activity: FragmentActivity) : BaseAdapter() {
                     .into(it)
             }
 
-        if (category.isNotBlank()) {
+        val tvName = vi.findViewById<TextView>(R.id.tvTorrName)
+        val nameKey = "$category\u0000$title"
+        if (tvName != null && tvName.getTag(R.id.tvTorrName) == nameKey) {
+        } else if (category.isNotBlank()) {
+            tvName?.setTag(R.id.tvTorrName, nameKey)
             val sIcon = SpannableString(" ")
             val cDrawable: Drawable? = when {
                 category.contains("movie", true) -> AppCompatResources.getDrawable(vi.context, R.drawable.round_movie_24)
@@ -100,31 +114,33 @@ class TorrentsAdapter(private val activity: FragmentActivity) : BaseAdapter() {
                 else -> null
             }
             if (cDrawable == null)
-                vi.findViewById<TextView>(R.id.tvTorrName)?.text = "${category.uppercase()} ● $title"
+                tvName?.text = "${category.uppercase()} ● $title"
             else {
                 cDrawable.setBounds(0, 0, cDrawable.intrinsicWidth, cDrawable.intrinsicHeight)
                 val span = CImageSpan(cDrawable)
                 sIcon.setSpan(span, 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                vi.findViewById<TextView>(R.id.tvTorrName)?.text = SpanFormat.format("%s $title", sIcon)
+                tvName?.text = SpanFormat.format("%s $title", sIcon)
             }
-        } else
-            vi.findViewById<TextView>(R.id.tvTorrName)?.text = title
+        } else {
+            tvName?.setTag(R.id.tvTorrName, nameKey)
+            tvName?.text = title
+        }
 
-        vi.findViewById<TextView>(R.id.tvTorrHash)?.text = when (list[position].src) {
+        vi.findViewById<TextView>(R.id.tvTorrHash)?.setTextIfChanged(when (list[position].src) {
             "torrmedia" -> mediaListSummary(list[position], isStale(list[position]))
 
             else -> hash.uppercase(Locale.getDefault())
-        }
+        })
         val td = vi.findViewById<TextView>(R.id.tvTorrDate)
         val ts = vi.findViewById<TextView>(R.id.tvTorrSize)
         if (addStr.isNotEmpty()) {
-            td?.text = addStr
+            td?.setTextIfChanged(addStr)
             td?.visibility = View.VISIBLE
         } else
             td?.visibility = View.GONE
 
         if (size > 0.0) {
-            ts?.text = Format.byteFmt(size)
+            ts?.setTextIfChanged(sizeText.getOrPut(size) { Format.byteFmt(size) })
             ts?.visibility = View.VISIBLE
         } else
             ts?.visibility = View.GONE
