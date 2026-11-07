@@ -21,6 +21,7 @@ import androidx.core.graphics.ColorUtils
 import androidx.core.net.toUri
 import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
+import androidx.fragment.app.FragmentManager
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -74,6 +75,8 @@ class MainActivity : AppCompatActivity() {
             if (BuildConfig.DEBUG) Log.d("MainActivity", "handleOnBackPressed()")
             if (isMenuVisible)
                 closeMenu()
+            else if ((supportFragmentManager.findFragmentById(R.id.container) as? TorrentsFragment)?.closeSearchOnBack() == true)
+                return
             else if (supportFragmentManager.backStackEntryCount > 0) {
                 supportFragmentManager.popBackStack()
             } else finish()
@@ -665,6 +668,13 @@ class MainActivity : AppCompatActivity() {
         findViewById<FrameLayout>(R.id.btnAdd)?.setOnClickListener {
             AddFragment().show(this@MainActivity, R.id.container, true)
             closeMenu()
+        }
+
+        findViewById<FrameLayout>(R.id.btnSearch)?.setOnClickListener {
+            closeMenu()
+            if (supportFragmentManager.backStackEntryCount > 0)
+                supportFragmentManager.popBackStackImmediate(null, FragmentManager.POP_BACK_STACK_INCLUSIVE)
+            (supportFragmentManager.findFragmentById(R.id.container) as? TorrentsFragment)?.openSearch()
         }
 
         findViewById<FrameLayout>(R.id.btnRemoveAll)?.setOnClickListener { _ ->
