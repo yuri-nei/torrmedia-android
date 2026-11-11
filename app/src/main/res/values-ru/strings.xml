@@ -342,6 +342,11 @@
     <string name="torrmedia_phase_rechecking">перепроверяю</string>
     <string name="torrmedia_phase_restarting">запускаю обратно</string>
     <string name="torrmedia_phase_prioritizing">меняю приоритет</string>
+    <string name="torrmedia_phase_enabling">включаю серию</string>
+    <string name="torrmedia_phase_starting">запускаю</string>
+    <string name="torrmedia_phase_deleting">удаляю</string>
+    <string name="torrmedia_phase_removing">снимаю раздачу</string>
+    <string name="torrmedia_phase_adding">добавляю</string>
     <string name="torrmedia_op_done">Готово</string>
     <string name="torrmedia_op_failed">Операция не удалась</string>
     <string name="torrmedia_op_still_running">Операция всё ещё выполняется</string>

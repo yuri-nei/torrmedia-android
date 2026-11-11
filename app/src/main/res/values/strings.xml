@@ -405,6 +405,11 @@
     <string name="torrmedia_phase_rechecking">rechecking</string>
     <string name="torrmedia_phase_restarting">restarting</string>
     <string name="torrmedia_phase_prioritizing">changing priority</string>
+    <string name="torrmedia_phase_enabling">enabling file</string>
+    <string name="torrmedia_phase_starting">starting</string>
+    <string name="torrmedia_phase_deleting">deleting</string>
+    <string name="torrmedia_phase_removing">removing</string>
+    <string name="torrmedia_phase_adding">adding</string>
     <string name="torrmedia_op_done">Done</string>
     <string name="torrmedia_op_failed">Operation failed</string>
     <string name="torrmedia_op_still_running">Operation is still running</string>

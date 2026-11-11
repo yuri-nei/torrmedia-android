@@ -101,6 +101,11 @@ fun operationPhaseLabel(phase: String?): String {
         "rechecking" -> R.string.torrmedia_phase_rechecking
         "restarting" -> R.string.torrmedia_phase_restarting
         "prioritizing" -> R.string.torrmedia_phase_prioritizing
+        "enabling" -> R.string.torrmedia_phase_enabling
+        "starting" -> R.string.torrmedia_phase_starting
+        "deleting" -> R.string.torrmedia_phase_deleting
+        "removing" -> R.string.torrmedia_phase_removing
+        "adding" -> R.string.torrmedia_phase_adding
         else -> return phase
     }
     return App.context.getString(res)
