@@ -110,7 +110,7 @@
             android:layout_marginLeft="3dp"
             android:layout_marginEnd="3dp"
             android:layout_marginRight="3dp"
-            android:layout_weight="2"
+            android:layout_weight="1.5"
             android:ellipsize="end"
             android:maxLines="1"
             android:singleLine="true"
@@ -120,6 +120,21 @@
             app:iconPadding="6dp"
             app:iconSize="22dp"
             app:iconTint="?attr/colorAccent" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAddOpen"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="3dp"
+            android:layout_marginLeft="3dp"
+            android:layout_marginEnd="3dp"
+            android:layout_marginRight="3dp"
+            android:layout_weight="1.5"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:singleLine="true"
+            android:text="@string/torrmedia_add_download_open" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAddCancel"

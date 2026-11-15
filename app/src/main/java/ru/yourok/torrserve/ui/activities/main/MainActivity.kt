@@ -53,6 +53,7 @@ import ru.yourok.torrserve.ui.fragments.main.update.apk.ApkUpdateFragment
 import ru.yourok.torrserve.ui.fragments.main.update.apk.UpdaterApk
 import ru.yourok.torrserve.ui.fragments.main.update.server.ServerUpdateFragment
 import ru.yourok.torrserve.ui.fragments.main.update.server.UpdaterServer
+import ru.yourok.torrserve.ui.fragments.qbit.DownloadsFilesFragment
 import ru.yourok.torrserve.utils.CImageSpan
 import ru.yourok.torrserve.utils.Format
 import ru.yourok.torrserve.utils.Format.dp2px
@@ -65,6 +66,12 @@ import kotlin.system.exitProcess
 
 
 class MainActivity : AppCompatActivity() {
+
+    companion object {
+        /// Open this torrmedia item's screen on start (the add window's "Download and open")
+        const val EXTRA_TORRMEDIA_ITEM = "torrmedia_item"
+        const val EXTRA_TORRMEDIA_TITLE = "torrmedia_title"
+    }
 
     private lateinit var viewModel: StatusViewModel
     private val themeUtil = ThemeUtil()
@@ -148,7 +155,29 @@ class MainActivity : AppCompatActivity() {
             }
             DonateMessage.showDonate(this)
             checkUpdate()
+            openTorrmediaItem(intent)
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        openTorrmediaItem(intent)
+    }
+
+    /// The item screen on top of the main list, so Back leads to the list
+    private fun openTorrmediaItem(intent: Intent?) {
+        val item = intent?.getStringExtra(EXTRA_TORRMEDIA_ITEM)
+        if (item.isNullOrEmpty())
+            return
+        intent.removeExtra(EXTRA_TORRMEDIA_ITEM) // not again after the activity is recreated
+        val title = intent.getStringExtra(EXTRA_TORRMEDIA_TITLE).orEmpty()
+        if (isMenuVisible)
+            closeMenu()
+        // Pop synchronously: show() skips a screen of the class that is on top, and another
+        // item's screen may be open.
+        supportFragmentManager.popBackStackImmediate(null, FragmentManager.POP_BACK_STACK_INCLUSIVE)
+        DownloadsFilesFragment.newInstance(item, title).show(this, R.id.container, true)
     }
 
     override fun onResume() {

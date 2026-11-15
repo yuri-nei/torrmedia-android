@@ -1,6 +1,7 @@
 package ru.yourok.torrserve.ui.fragments.qbit
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -30,6 +31,7 @@ import ru.yourok.torrserve.server.api.TorrmediaStore
 import ru.yourok.torrserve.server.api.missingBytes
 import ru.yourok.torrserve.server.api.selectedBytes
 import ru.yourok.torrserve.settings.Settings
+import ru.yourok.torrserve.ui.activities.main.MainActivity
 import ru.yourok.torrserve.ui.fragments.TSFragment
 import ru.yourok.torrserve.utils.Format
 import ru.yourok.torrserve.utils.ThemeUtil
@@ -72,6 +74,9 @@ class AddTorrentFragment : TSFragment() {
     private var settled = false
     private var closed = false
 
+    /// "Download and open": once the item exists, show its screen in the main window
+    private var openAfter = false
+
     /// What to do when finished: close the window. Our activity is a dialog, and there is
     /// nowhere to go back to after adding.
     var onDone: (() -> Unit)? = null
@@ -95,7 +100,8 @@ class AddTorrentFragment : TSFragment() {
         }
         view.findViewById<MaterialButton>(R.id.btnAddSelectAll)?.setOnClickListener { selectAll() }
         view.findViewById<View>(R.id.rowAddCategory)?.setOnClickListener { chooseCategory() }
-        view.findViewById<MaterialButton>(R.id.btnAddDownload)?.setOnClickListener { download() }
+        view.findViewById<MaterialButton>(R.id.btnAddDownload)?.setOnClickListener { download(false) }
+        view.findViewById<MaterialButton>(R.id.btnAddOpen)?.setOnClickListener { download(true) }
         view.findViewById<MaterialButton>(R.id.btnAddCancel)?.setOnClickListener { cancel() }
 
         loadCategories()
@@ -168,6 +174,9 @@ class AddTorrentFragment : TSFragment() {
     }
 
     private fun render(current: Draft) {
+        // the confirmation and the stream's snapshot both report CONFIRMED: act on it once
+        if (closed)
+            return
         draft = current
         if (selected == null && current.files.isNotEmpty())
             selected = current.files.filter { it.wanted }.map { it.id }.toMutableSet()
@@ -177,7 +186,11 @@ class AddTorrentFragment : TSFragment() {
         when (current.status) {
             DraftStatus.CONFIRMED -> {
                 settled = true
-                App.toast(R.string.torrmedia_add_sent)
+                val item = current.item
+                if (openAfter && !item.isNullOrEmpty())
+                    openItem(item, current.title)
+                else
+                    App.toast(R.string.torrmedia_add_sent)
                 close()
                 return
             }
@@ -267,6 +280,7 @@ class AddTorrentFragment : TSFragment() {
         // An empty selection means "add for later": the item is created stopped, and the
         // wanted episodes are enabled later from its screen. So the button is always enabled.
         vi.findViewById<MaterialButton>(R.id.btnAddDownload)?.isEnabled = !busy
+        vi.findViewById<MaterialButton>(R.id.btnAddOpen)?.isEnabled = !busy
 
         viewLifecycleOwner.lifecycleScope.launch {
             if (busy) showProgress() else hideProgress()
@@ -318,7 +332,7 @@ class AddTorrentFragment : TSFragment() {
 
     // --- confirm and discard ------------------------------------------------
 
-    private fun download() {
+    private fun download(open: Boolean) {
         val current = draft ?: return
         // Nothing selected: the item is created stopped and there is nothing to download,
         // so there is no space to check and nothing to confirm here.
@@ -330,18 +344,19 @@ class AddTorrentFragment : TSFragment() {
             AlertDialog.Builder(requireContext())
                 .setTitle(R.string.torrmedia_add_download)
                 .setMessage(getString(R.string.torrmedia_add_overflow_confirm, Format.byteFmt(missing)))
-                .setPositiveButton(android.R.string.ok) { _, _ -> confirm(chosen) }
+                .setPositiveButton(android.R.string.ok) { _, _ -> confirm(chosen, open) }
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()
             return
         }
-        confirm(chosen)
+        confirm(chosen, open)
     }
 
-    private fun confirm(files: List<String>) {
+    private fun confirm(files: List<String>, open: Boolean) {
         val id = draftId
         if (id.isEmpty())
             return
+        openAfter = open
         viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
             showProgress()
             try {
@@ -366,6 +381,15 @@ class AddTorrentFragment : TSFragment() {
         if (id.isNotEmpty())
             thread { runCatching { TorrmediaApi.discardDraft(id) } }
         close()
+    }
+
+    /// The new item's screen in the main window: no need to leave the other app and find it by hand
+    private fun openItem(item: String, title: String) {
+        val intent = Intent(App.context, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .putExtra(MainActivity.EXTRA_TORRMEDIA_ITEM, item)
+            .putExtra(MainActivity.EXTRA_TORRMEDIA_TITLE, title)
+        App.context.startActivity(intent)
     }
 
     /// Show the reason and leave. Also called from a background thread, so closing the
