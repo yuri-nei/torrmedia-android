@@ -18,8 +18,17 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import androidx.core.net.toUri
 
+/**
+ * torrmedia: the app speaks the MatriX API. The release feed is shared with upstream's Silo
+ * rewrite, whose own client skips everything but Silo.*; here it is the other way round, so a
+ * Silo release published in the feed is never installed over a working MatriX server.
+ */
+internal fun isSupportedServerVersion(version: String?): Boolean = version?.startsWith("MatriX.") == true
+
 object UpdaterServer {
     private var version: ServVersion? = null
+    /// the feed's current release when it is not a MatriX one
+    private var unsupported: String? = null
     private var error: String = ""
     private val serverFile = ServerFile()
 
@@ -138,7 +147,14 @@ object UpdaterServer {
         return try {
             val body = Net.get(Consts.UPDATE_SERVER_PATH)
             val gson = Gson()
-            version = gson.fromJson(body, ServVersion::class.java)
+            val published = gson.fromJson(body, ServVersion::class.java)
+            if (isSupportedServerVersion(published?.version)) {
+                version = published
+                unsupported = null
+            } else {
+                version = null
+                unsupported = published?.version
+            }
             true
         } catch (e: Exception) {
             error = e.message ?: App.context.getString(R.string.warn_error_check_ver)
@@ -218,15 +234,18 @@ object UpdaterServer {
             }
         }
         if (version == null)
-            rv = App.context.getString(R.string.no_data) // error
+            rv = unsupported?.let { App.context.getString(R.string.torrmedia_server_unsupported_fmt, it) }
+                ?: App.context.getString(R.string.no_data) // error
         return rv
     }
 
     private fun getLink(): String {
         if (version == null)
             check()
-        if (version == null)
+        if (version == null) {
+            unsupported?.let { App.toast(App.context.getString(R.string.torrmedia_server_unsupported_fmt, it), true) }
             return ""
+        }
         version?.let { ver ->
             val arch = getArch()
             if (arch.isEmpty())

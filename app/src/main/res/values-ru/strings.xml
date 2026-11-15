@@ -375,4 +375,5 @@
     <string name="torrmedia_chooser_default_watch">Сразу смотреть</string>
     <string name="torrmedia_chooser_default_list">Сразу в список</string>
     <string name="torrmedia_add_download_open">Скачать и открыть</string>
+    <string name="torrmedia_server_unsupported_fmt">%s не поддерживается: приложению нужен TorrServer MatriX</string>
 </resources>
