@@ -5,6 +5,8 @@ import android.text.TextUtils
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.BaseAdapter
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.core.net.toUri
@@ -13,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.yourok.torrserve.R
+import ru.yourok.torrserve.app.App
 import ru.yourok.torrserve.ext.commitFragment
 import ru.yourok.torrserve.server.local.TorrService
 import ru.yourok.torrserve.settings.Settings
@@ -134,22 +137,43 @@ class ChooserFragment : TSFragment() {
             val name = when (pkg) {
                 "" -> getString(R.string.torrmedia_chooser_player_ask)
                 "0" -> getString(R.string.torrmedia_chooser_player_system)
-                else -> withContext(Dispatchers.IO) { Players.getList() }
-                    .firstOrNull { it.first == pkg }?.second ?: pkg
+                else -> withContext(Dispatchers.IO) {
+                    val pm = App.context.packageManager
+                    runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
+                }
             }
             view?.findViewById<TextView>(R.id.tvNamePlayer)?.text =
                 getString(R.string.torrmedia_chooser_player_fmt, name)
         }
     }
 
+    /// The installed players with their icons, as upstream's picker shows them
     private fun choosePlayer() {
         lifecycleScope.launch {
-            val list = withContext(Dispatchers.IO) { Players.getList() }
-            AlertDialog.Builder(requireContext())
+            val ctx = requireContext()
+            val pm = ctx.packageManager
+            val apps = withContext(Dispatchers.IO) {
+                Players.getResolveInfoList().map { Triple(it.activityInfo.packageName, it.loadLabel(pm).toString(), it) }
+            }
+            val adapter = object : BaseAdapter() {
+                private val inflater = LayoutInflater.from(ctx)
+                override fun getCount() = apps.size
+                override fun getItem(position: Int) = apps[position]
+                override fun getItemId(position: Int) = position.toLong()
+                override fun getView(position: Int, cv: View?, parent: ViewGroup?): View {
+                    val v = cv ?: inflater.inflate(R.layout.app_list_item, parent, false)
+                    val (pkg, label, info) = apps[position]
+                    v.findViewById<ImageView>(R.id.imageViewIcon)?.setImageDrawable(info.loadIcon(pm))
+                    v.findViewById<TextView>(R.id.textViewMain)?.text = label
+                    v.findViewById<TextView>(R.id.textViewSecond)?.text = pkg
+                    return v
+                }
+            }
+            AlertDialog.Builder(ctx)
                 .setTitle(getString(R.string.select_player))
-                .setItems(list.map { it.second }.toTypedArray()) { _, which ->
-                    Play.tmpPlayerPackage = list[which].first
-                    showPlayer(list[which].first)
+                .setAdapter(adapter) { _, which ->
+                    Play.tmpPlayerPackage = apps[which].first
+                    showPlayer(apps[which].first)
                 }
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()

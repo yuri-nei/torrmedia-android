@@ -291,7 +291,7 @@ class TorrentsFragment : TSFragment() {
 
     fun sort(mode: Boolean = sortMode) {
         val list = torrentAdapter!!.list
-        if (list.size > 0) {
+        if (list.isNotEmpty()) {
             sortMode = !mode
             Settings.set("sort_torrents", sortMode)
             updateList()
@@ -307,6 +307,7 @@ class TorrentsFragment : TSFragment() {
         category = cat
         updateList()
     }
+
 
     private fun updateList() {
         if (entering && torrentAdapter?.list?.isNotEmpty() == true) {
