@@ -440,4 +440,5 @@
     <string name="torrmedia_chooser_default_watch">Watch right away</string>
     <string name="torrmedia_chooser_default_list">Add to list right away</string>
     <string name="torrmedia_add_download_open">Download and open</string>
+    <string name="torrmedia_wordmark" translatable="false">torr<b>media</b></string>
 </resources>

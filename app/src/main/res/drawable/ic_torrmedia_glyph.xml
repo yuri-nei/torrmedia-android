@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The launcher glyph without its tile, for places that have their own background.
+     The play mark is a hole: the triangle runs against the bar, so it is cut out under
+     the default non-zero fill rule, with no fillType (API 24+) needed. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="34dp"
+    android:height="30dp"
+    android:viewportWidth="66"
+    android:viewportHeight="58">
+    <group
+        android:translateX="-21"
+        android:translateY="-25">
+        <path
+            android:fillColor="#81C995"
+            android:pathData="M30,25H78A9,9 0,0 1,78 43H30A9,9 0,0 1,30 25ZM30,28.5L30,39.5L41,34Z" />
+        <path
+            android:fillColor="#3C4043"
+            android:pathData="M27.5,50H80.5A6.5,6.5 0,0 1,80.5 63H27.5A6.5,6.5 0,0 1,27.5 50Z" />
+        <path
+            android:fillColor="#8AB4F8"
+            android:pathData="M27.5,50H56.5A6.5,6.5 0,0 1,56.5 63H27.5A6.5,6.5 0,0 1,27.5 50Z" />
+        <path
+            android:fillColor="#3C4043"
+            android:pathData="M27.5,70H80.5A6.5,6.5 0,0 1,80.5 83H27.5A6.5,6.5 0,0 1,27.5 70Z" />
+        <path
+            android:fillColor="#8AB4F8"
+            android:pathData="M27.5,70H32.5A6.5,6.5 0,0 1,32.5 83H27.5A6.5,6.5 0,0 1,27.5 70Z" />
+    </group>
+</vector>
