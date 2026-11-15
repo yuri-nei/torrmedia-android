@@ -1,15 +1,17 @@
 package ru.yourok.torrserve.ui.fragments.play
 
-import android.net.Uri
 import android.os.Bundle
+import android.text.TextUtils
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
-import androidx.cardview.widget.CardView
+import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.switchmaterial.SwitchMaterial
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import ru.yourok.torrserve.R
 import ru.yourok.torrserve.ext.commitFragment
 import ru.yourok.torrserve.server.local.TorrService
@@ -20,9 +22,26 @@ import ru.yourok.torrserve.ui.activities.play.players.Players
 import ru.yourok.torrserve.ui.fragments.TSFragment
 
 
+/**
+ * What to do with a link opened from another app (Lampa and the like).
+ *
+ * The two destinations are large tiles: watch now through TorrServer, or download with the
+ * server's qBittorrent. Adding to the TorrServer list without playing and a one-off player are
+ * rare and sit in a quiet row below. Instead of a "remember" switch, focus starts on the action
+ * chosen last time: one OK repeats it, and the other destination is still one step away.
+ * Skipping the window altogether is a setting.
+ */
 class ChooserFragment : TSFragment() {
 
+    companion object {
+        // Action codes, shared with PlayActivity and the stored default
+        const val ADD_PLAY = 2
+        const val ADD = 3
+        const val QBIT = 4
+    }
+
     fun show(activity: PlayActivity, forceChoose: Boolean, onChoose: (Int) -> Unit) {
+        // 1 (play without saving) has no tile any more but is still honoured as a stored default
         val saveChoose = Settings.getChooserAction()
         if (!forceChoose && saveChoose in 1..3) {
             onChoose(saveChoose)
@@ -52,62 +71,88 @@ class ChooserFragment : TSFragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        view.apply {
-            findViewById<CardView>(R.id.cvPlay)?.setOnClickListener {
-                lifecycleScope.launch {
-                    onResult?.invoke(1)
-                    saveAction(1)
-                }
-            }
-            findViewById<CardView>(R.id.cvAddPlay)?.setOnClickListener {
-                lifecycleScope.launch {
-                    onResult?.invoke(2)
-                    saveAction(2)
-                }
-            }
-            findViewById<CardView>(R.id.cvAdd)?.setOnClickListener {
-                lifecycleScope.launch {
-                    onResult?.invoke(3)
-                    saveAction(3)
-                }
-            }
-            findViewById<CardView>(R.id.cvQbit)?.apply {
-                val link = (activity as? PlayActivity)?.torrentLink ?: ""
-                val scheme = Uri.parse(link).scheme?.lowercase() ?: ""
-                // the contract accepts only magnet: — showing the button for http(s) would mean
-                // promising a rejection
-                if (Settings.getTorrmediaUrl().isNotEmpty() && scheme == "magnet")
-                    visibility = View.VISIBLE
-                setOnClickListener {
-                    lifecycleScope.launch {
-                        onResult?.invoke(4) // qBit choice is intentionally never saved as default
-                    }
-                }
-            }
-            findViewById<CardView>(R.id.cvPlayer)?.setOnClickListener {
-                lifecycleScope.launch {
-                    val list = Players.getList()
-                    val titles = list.map { it.second }.toTypedArray()
+        val link = (activity as? PlayActivity)?.torrentLink ?: ""
+        val scheme = link.toUri().scheme?.lowercase() ?: ""
+        // the contract accepts only magnet: — showing the tile for http(s) would mean
+        // promising a rejection
+        val qbit = Settings.getTorrmediaUrl().isNotEmpty() && scheme == "magnet"
 
-                    AlertDialog.Builder(view.context)
-                        .setTitle(getString(R.string.select_player))
-                        .setItems(titles) { _, which ->
-                            val selectedPackage = list[which].first
-                            Play.tmpPlayerPackage = selectedPackage
-                        }
-                        .setNegativeButton(android.R.string.cancel, null)
-                        .show()
-                }
-            }
+        view.findViewById<View>(R.id.cvAddPlay)?.setOnClickListener { choose(ADD_PLAY) }
+        view.findViewById<View>(R.id.cvQbit)?.apply {
+            if (qbit)
+                visibility = View.VISIBLE
+            setOnClickListener { choose(QBIT) }
+        }
+        view.findViewById<View>(R.id.cvAdd)?.setOnClickListener { choose(ADD) }
+        view.findViewById<View>(R.id.cvPlayer)?.setOnClickListener { choosePlayer() }
+
+        showTitle()
+        showPlayer(Settings.getPlayer())
+
+        val target = when (Settings.getChooserLastAction()) {
+            QBIT -> if (qbit) R.id.cvQbit else R.id.cvAddPlay
+            ADD -> R.id.cvAdd
+            else -> R.id.cvAddPlay
+        }
+        // After layout: a request made while inflating is lost, and the system would then
+        // give focus to whatever it finds first.
+        view.post { view.findViewById<View>(target)?.requestFocus() }
+    }
+
+    override fun onDestroyView() {
+        activity?.findViewById<TextView>(R.id.info_title)?.apply {
+            setText(R.string.app_name)
+            maxLines = Int.MAX_VALUE
+            ellipsize = null
+        }
+        super.onDestroyView()
+    }
+
+    private fun choose(action: Int) {
+        // the download choice is remembered for focus only: it always needs the file list
+        Settings.setChooserLastAction(action)
+        lifecycleScope.launch {
+            onResult?.invoke(action)
         }
     }
 
-    private fun saveAction(action: Int) {
-        view?.findViewById<SwitchMaterial>(R.id.cbSaveChooseAction)?.apply {
-            if (isChecked)
-                lifecycleScope.launch {
-                    Settings.setChooserAction(action)
+    /// The window is titled with the torrent the other app sent, not with the app's name
+    private fun showTitle() {
+        val title = (activity as? PlayActivity)?.torrentTitle?.trim().orEmpty()
+        if (title.isEmpty())
+            return
+        activity?.findViewById<TextView>(R.id.info_title)?.apply {
+            text = title
+            maxLines = 2
+            ellipsize = TextUtils.TruncateAt.END
+        }
+    }
+
+    /// "Player: <name>" for the player the next playback will use
+    private fun showPlayer(pkg: String) {
+        lifecycleScope.launch {
+            val name = when (pkg) {
+                "" -> getString(R.string.torrmedia_chooser_player_ask)
+                "0" -> getString(R.string.torrmedia_chooser_player_system)
+                else -> withContext(Dispatchers.IO) { Players.getList() }
+                    .firstOrNull { it.first == pkg }?.second ?: pkg
+            }
+            view?.findViewById<TextView>(R.id.tvNamePlayer)?.text =
+                getString(R.string.torrmedia_chooser_player_fmt, name)
+        }
+    }
+
+    private fun choosePlayer() {
+        lifecycleScope.launch {
+            val list = withContext(Dispatchers.IO) { Players.getList() }
+            AlertDialog.Builder(requireContext())
+                .setTitle(getString(R.string.select_player))
+                .setItems(list.map { it.second }.toTypedArray()) { _, which ->
+                    Play.tmpPlayerPackage = list[which].first
+                    showPlayer(list[which].first)
                 }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
         }
     }
 }

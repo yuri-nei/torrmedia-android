@@ -267,7 +267,6 @@
     <string name="switch_disable_accessibility_on_server_switch_summary_on">Сервис специальных возможностей будет отключён при переключении с локального на удалённый сервер</string>
     <string name="switch_disable_accessibility_on_server_switch_summary_off">Сервис специальных возможностей не будет отключён при переключении с локального на удалённый сервер</string>
     <!-- torrmedia -->
-    <string name="qbit_download">Скачать (qBittorrent)</string>
     <string name="torrmedia_add_resolving">Читаем торрент…</string>
     <string name="torrmedia_add_starting">запускаем</string>
     <string name="torrmedia_add_cancelling">отменяем</string>
@@ -360,4 +359,16 @@
     <string name="qbit_eta">Осталось</string>
     <string name="qbit_added">Добавлен</string>
     <string name="torrmedia_item_gone">Раздача исчезла</string>
+    <string name="torrmedia_chooser_watch">Смотреть</string>
+    <string name="torrmedia_chooser_download">Скачать</string>
+    <string name="torrmedia_chooser_download_hint">qBit на сервере</string>
+    <string name="torrmedia_chooser_list_only">Только в список</string>
+    <string name="torrmedia_chooser_player">Плеер</string>
+    <string name="torrmedia_chooser_player_fmt">Плеер: %s</string>
+    <string name="torrmedia_chooser_player_ask">спрашивать</string>
+    <string name="torrmedia_chooser_player_system">системный</string>
+    <string name="torrmedia_chooser_default_title">Ссылки из других приложений</string>
+    <string name="torrmedia_chooser_default_ask">Спрашивать каждый раз</string>
+    <string name="torrmedia_chooser_default_watch">Сразу смотреть</string>
+    <string name="torrmedia_chooser_default_list">Сразу в список</string>
 </resources>

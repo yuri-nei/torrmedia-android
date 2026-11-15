@@ -62,6 +62,10 @@ object Settings {
     fun getChooserAction(): Int = get("chooser_action", 0)
     fun setChooserAction(v: Int) = set("chooser_action", v)
 
+    /// The action picked last time in the link window: its initial focus goes there
+    fun getChooserLastAction(): Int = get("chooser_last_action", 0)
+    fun setChooserLastAction(v: Int) = set("chooser_last_action", v)
+
     // torrmedia is the app's single entry point: the client never needs the qBittorrent
     // address or credentials for anything (see API.md)
     fun getTorrmediaUrl(): String = withHttpScheme(get("torrmedia_url", ""))

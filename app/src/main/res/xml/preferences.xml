@@ -75,8 +75,7 @@
 
     <Preference
         app:key="remove_action"
-        app:summary="@string/remove_action_summary"
-        app:title="@string/remove_action_title" />
+        app:title="@string/torrmedia_chooser_default_title" />
 
     <PreferenceCategory
         style="@style/HeadPreferenceCategory"

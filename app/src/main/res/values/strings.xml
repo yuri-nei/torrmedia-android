@@ -329,7 +329,6 @@
     <string name="torrserver_log_trimmed">Log content trimmed (showing last %s)</string>
 
     <!-- torrmedia -->
-    <string name="qbit_download">Download (qBittorrent)</string>
     <string name="torrmedia_add_resolving">Reading the torrent…</string>
     <string name="torrmedia_add_starting">starting</string>
     <string name="torrmedia_add_cancelling">cancelling</string>
@@ -423,4 +422,17 @@
     <string name="qbit_eta">ETA</string>
     <string name="qbit_added">Added</string>
     <string name="torrmedia_item_gone">Release is gone</string>
+    <string name="torrmedia_chooser_watch">Watch</string>
+    <string name="torrmedia_chooser_watch_hint" translatable="false">TorrServer</string>
+    <string name="torrmedia_chooser_download">Download</string>
+    <string name="torrmedia_chooser_download_hint">qBit on the server</string>
+    <string name="torrmedia_chooser_list_only">Add to list only</string>
+    <string name="torrmedia_chooser_player">Player</string>
+    <string name="torrmedia_chooser_player_fmt">Player: %s</string>
+    <string name="torrmedia_chooser_player_ask">ask</string>
+    <string name="torrmedia_chooser_player_system">system</string>
+    <string name="torrmedia_chooser_default_title">Links from other apps</string>
+    <string name="torrmedia_chooser_default_ask">Ask every time</string>
+    <string name="torrmedia_chooser_default_watch">Watch right away</string>
+    <string name="torrmedia_chooser_default_list">Add to list right away</string>
 </resources>

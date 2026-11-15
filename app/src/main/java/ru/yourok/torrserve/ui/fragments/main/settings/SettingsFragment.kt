@@ -53,6 +53,7 @@ import ru.yourok.torrserve.ui.fragments.main.servfinder.ServerFinderFragment
 import ru.yourok.torrserve.ui.fragments.main.servsets.ServerSettingsFragment
 import ru.yourok.torrserve.ui.fragments.main.update.apk.ApkUpdateFragment
 import ru.yourok.torrserve.ui.fragments.main.update.apk.UpdaterApk
+import ru.yourok.torrserve.ui.fragments.play.ChooserFragment
 import ru.yourok.torrserve.ui.fragments.speedtest.SpeedTest
 import ru.yourok.torrserve.utils.Accessibility
 import ru.yourok.torrserve.utils.Format.dp2px
@@ -137,10 +138,30 @@ class SettingsFragment : PreferenceFragmentCompat() {
             true
         }
 
-        findPreference<Preference>("remove_action")?.setOnPreferenceClickListener {
-            Settings.setChooserAction(0)
-            App.toast(R.string.reset_def)
-            true
+        // What a link from another app does without asking. Downloading is not offered: it
+        // always needs the file list. 1 (play without saving) is a value from older versions.
+        findPreference<Preference>("remove_action")?.apply {
+            val values = intArrayOf(0, ChooserFragment.ADD_PLAY, ChooserFragment.ADD)
+            val names = arrayOf(
+                getString(R.string.torrmedia_chooser_default_ask),
+                getString(R.string.torrmedia_chooser_default_watch),
+                getString(R.string.torrmedia_chooser_default_list)
+            )
+            fun current() = values.indexOf(Settings.getChooserAction().let { if (it == 1) ChooserFragment.ADD_PLAY else it })
+                .coerceAtLeast(0)
+            summary = names[current()]
+            setOnPreferenceClickListener { pref ->
+                AlertDialog.Builder(requireContext())
+                    .setTitle(R.string.torrmedia_chooser_default_title)
+                    .setSingleChoiceItems(names, current()) { dialog, which ->
+                        Settings.setChooserAction(values[which])
+                        pref.summary = names[which]
+                        dialog.dismiss()
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+                true
+            }
         }
 
         findPreference<EditTextPreference>("torrmedia_url")?.setOnBindEditTextListener {
