@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- The fork's colors live in a separate file: colors.xml belongs to upstream, and
+     rebasing onto a new TorrServe version must not conflict over our additions. -->
 <resources>
     <color name="torrmedia_disk_low">#ffb300</color>
     <color name="torrmedia_alert">#e5534b</color>
 
+    <!-- Palette of the "Material" themes: neutral greys and a blue accent from Google's
+         system palette (Material/Android), matching the fork's blue icon. -->
     <color name="md_dark_bg">#202124</color>
     <color name="md_dark_surface">#292a2d</color>
     <color name="md_dark_dialog">#2d2e31</color>
@@ -10,6 +14,7 @@
     <color name="md_dark_text_secondary">#bdc1c6</color>
     <color name="md_dark_primary">#a1b6d9</color>
     <color name="md_dark_primary_variant">#87a1c9</color>
+    <!-- FAB background: upstream tints the FAB icons white, which are invisible on light blue -->
     <color name="md_dark_secondary">#496ba2</color>
     <color name="md_dark_done">#81c995</color>
     <color name="md_dark_error">#f28b82</color>

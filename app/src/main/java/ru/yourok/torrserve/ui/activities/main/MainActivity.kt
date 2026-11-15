@@ -155,6 +155,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         themeUtil.onResume(this)
         updateStatus()
+        // the address or token may have been changed in settings — do not wait for the next tick
         viewModel.torrmedia.refresh()
         if (Settings.showFab) setupFab()
         if (Settings.showSortFab) setupSortFab()
@@ -224,6 +225,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * The download server block in the side menu header, on a par with TorrServer's: a caption and
+     * a state label, the address, a used-space bar. Without a torrmedia address set there is no
+     * block at all. The observer is attached once (onCreate), not in onResume like TorrServer's
+     * above — otherwise every return to the screen would add one more.
+     */
     private fun setupTorrmediaHeader() {
         val block = findViewById<View>(R.id.torrmediaHeader) ?: return
         val hostView = findViewById<TextView>(R.id.tvTorrmediaHost)
@@ -237,6 +244,7 @@ class MainActivity : AppCompatActivity() {
             SettingsFragment().show(this, R.id.container)
             closeMenu()
         }
+        // the menu was opened — the numbers should be fresh, not twenty seconds old
         findViewById<DrawerLayout>(R.id.drawerLayout)?.addDrawerListener(object : DrawerLayout.SimpleDrawerListener() {
             override fun onDrawerOpened(drawerView: View) {
                 viewModel.torrmedia.refresh()
@@ -300,6 +308,8 @@ class MainActivity : AppCompatActivity() {
                 text = when {
                     free != null && total != null -> getString(R.string.torrmedia_add_free_fmt, Format.byteFmt(free), Format.byteFmt(total))
                     free != null -> getString(R.string.torrmedia_add_free_short_fmt, Format.byteFmt(free))
+                    // the service is reachable but did not report the space: say exactly that
+                    // instead of hiding the row
                     reachable && storage != null -> getString(R.string.header_torrmedia_disk_unknown)
                     else -> null
                 }
@@ -312,6 +322,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /// The same chip as on the TorrServer version, so that both header rows read the same way
     private fun labelChip(color: Int): MaterialShapeDrawable {
         val shape = ShapeAppearanceModel().toBuilder()
             .setAllCorners(CornerFamily.ROUNDED, dp2px(2.0f).toFloat())
@@ -670,6 +681,7 @@ class MainActivity : AppCompatActivity() {
             closeMenu()
         }
 
+        // Search in the items list: from any screen, back to the list with the field above it
         findViewById<FrameLayout>(R.id.btnSearch)?.setOnClickListener {
             closeMenu()
             if (supportFragmentManager.backStackEntryCount > 0)

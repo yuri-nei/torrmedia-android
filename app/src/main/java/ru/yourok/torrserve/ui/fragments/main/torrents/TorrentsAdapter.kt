@@ -30,6 +30,8 @@ import java.util.Locale
 class TorrentsAdapter(private val activity: FragmentActivity) : BaseAdapter() {
     val list = mutableListOf<Torrent>()
 
+    /// No connection to the library: its rows are stale, and actions on them must not be
+    /// offered — the server would reject them anyway, and the user would take them as working.
     private var mediaStale = false
 
     fun setMediaStale(stale: Boolean) {
@@ -41,6 +43,9 @@ class TorrentsAdapter(private val activity: FragmentActivity) : BaseAdapter() {
 
     fun isStale(torrent: Torrent): Boolean = mediaStale && torrent.src == "torrmedia"
 
+    /// List rows are rebound in full on any change and every time the screen comes back; on a
+    /// TV binding cost ~5 ms per row. Date and size are formatted (SimpleDateFormat,
+    /// String.format) once per value.
     private val dateText = HashMap<Long, String>()
     private val sizeText = HashMap<Long, String>()
 
@@ -86,6 +91,7 @@ class TorrentsAdapter(private val activity: FragmentActivity) : BaseAdapter() {
         } else
             ivPoster?.let {
                 it.visibility = View.VISIBLE
+                // the same poster is already set (or loading) in this view — no new request needed
                 if (it.getTag(R.id.ivPoster) == poster)
                     return@let
                 it.setTag(R.id.ivPoster, poster)
@@ -102,6 +108,7 @@ class TorrentsAdapter(private val activity: FragmentActivity) : BaseAdapter() {
         val tvName = vi.findViewById<TextView>(R.id.tvTorrName)
         val nameKey = "$category\u0000$title"
         if (tvName != null && tvName.getTag(R.id.tvTorrName) == nameKey) {
+            // same title with the same category icon — do not rebuild
         } else if (category.isNotBlank()) {
             tvName?.setTag(R.id.tvTorrName, nameKey)
             val sIcon = SpannableString(" ")
@@ -127,6 +134,8 @@ class TorrentsAdapter(private val activity: FragmentActivity) : BaseAdapter() {
         }
 
         vi.findViewById<TextView>(R.id.tvTorrHash)?.setTextIfChanged(when (list[position].src) {
+            // torrmedia row: the status arrives normalized; the id is opaque, not needed on screen
+            // download server row: the id is opaque, not needed on screen — a summary instead
             "torrmedia" -> mediaListSummary(list[position], isStale(list[position]))
 
             else -> hash.uppercase(Locale.getDefault())

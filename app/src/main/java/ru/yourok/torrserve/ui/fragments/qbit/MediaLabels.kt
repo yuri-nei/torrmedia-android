@@ -11,6 +11,11 @@ import ru.yourok.torrserve.server.models.torrent.Torrent
 import ru.yourok.torrserve.utils.Format
 import java.util.Locale
 
+/**
+ * Human-readable labels for the contract's normalized vocabulary.
+ * The client derives nothing from the status: a label is only a label,
+ * the set of buttons comes from the actions of the received object.
+ */
 
 fun itemStatusLabel(status: ItemStatus): String = App.context.getString(
     when (status) {
@@ -65,6 +70,12 @@ fun filePriorityLabel(priority: FilePriority): String = App.context.getString(
     }
 )
 
+/**
+ * Summary row of a download server item in the main list, in words instead of icons:
+ * "Downloading 45% · ↓ 12.3 Mbit/s · ready 2 of 8 · watched 1".
+ * The percentage only while not everything is downloaded, the speed only while downloading,
+ * the episode counter only for multi-file items.
+ */
 fun mediaListSummary(t: Torrent, stale: Boolean): String {
     val parts = mutableListOf<String>()
     if (stale)
@@ -91,6 +102,8 @@ fun mediaListSummary(t: Torrent, stale: Boolean): String {
 private fun String.capitalized(): String =
     replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
 
+/// Operation phase. The contract's vocabulary is open ("a human-readable phase"), so an
+/// unfamiliar value is shown as is rather than hidden.
 fun operationPhaseLabel(phase: String?): String {
     if (phase.isNullOrBlank())
         return ""

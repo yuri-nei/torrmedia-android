@@ -74,6 +74,8 @@ class ChooserFragment : TSFragment() {
             findViewById<CardView>(R.id.cvQbit)?.apply {
                 val link = (activity as? PlayActivity)?.torrentLink ?: ""
                 val scheme = Uri.parse(link).scheme?.lowercase() ?: ""
+                // the contract accepts only magnet: — showing the button for http(s) would mean
+                // promising a rejection
                 if (Settings.getTorrmediaUrl().isNotEmpty() && scheme == "magnet")
                     visibility = View.VISIBLE
                 setOnClickListener {

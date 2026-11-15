@@ -34,6 +34,8 @@
         android:textAppearance="@style/TextAppearance.AppCompat.Small"
         tools:text="Selected 3 of 10 · 12.4 GB · Free 41 GB of 99 GB" />
 
+    <!-- Category is a row with a value, not a button: a full-width button promises
+         an action, while this is a property of the torrent that can be changed -->
     <LinearLayout
         android:id="@+id/rowAddCategory"
         android:layout_width="match_parent"

@@ -17,6 +17,7 @@ class TorrmediaHeaderTest {
     @Test
     fun `link state comes from health checks`() {
         assertEquals(TorrmediaLink.ONLINE, linkOf(health("root" to "ok", "viewed" to "ok", "qbittorrent" to "ok")))
+        // qBittorrent is a separate cause: the service is alive but has nothing to download with
         assertEquals(TorrmediaLink.QBIT_DOWN, linkOf(health("root" to "ok", "qbittorrent" to "connection refused")))
         assertEquals(TorrmediaLink.DEGRADED, linkOf(health("root" to "media root is not available", "qbittorrent" to "ok")))
         assertEquals(TorrmediaLink.MISMATCH, linkOf(health("root" to "ok", contract = TorrmediaApi.CONTRACT + 1)))
@@ -29,6 +30,7 @@ class TorrmediaHeaderTest {
         assertEquals(DiskLevel.OK, diskLevel(half))
         assertEquals(DiskLevel.LOW, diskLevel(Storage(8 * gib, 100 * gib, gib / 2)))
         assertEquals(DiskLevel.CRITICAL, diskLevel(Storage(2 * gib, 100 * gib, gib / 2)))
+        // on a small partition the server reserve, not the percentage, decides criticality
         assertEquals(DiskLevel.CRITICAL, diskLevel(Storage(gib - 1, 20 * gib, gib / 2)))
     }
 

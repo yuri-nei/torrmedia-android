@@ -21,6 +21,14 @@ import ru.yourok.torrserve.server.api.MediaState
 import ru.yourok.torrserve.server.api.TorrmediaStore
 import ru.yourok.torrserve.server.models.torrent.Torrent
 
+/**
+ * The list: TorrServer rows + torrmedia rows.
+ *
+ * torrmedia is not polled at all — the server itself sends a ready snapshot over the /events
+ * stream on every change. TorrServer has no event stream of its own, so its list is still read
+ * by polling; that is the only timer left here.
+ */
+/// How long the library list stream stays open after leaving the main screen
 private const val STREAM_LINGER_MS = 30_000L
 
 class TorrentsViewModel : ViewModel() {
@@ -28,10 +36,17 @@ class TorrentsViewModel : ViewModel() {
     private val store = TorrmediaStore.items()
     private val local = MutableStateFlow<List<Torrent>>(emptyList())
 
+    /// the library state, separate from the list: the screen must be able to show "the stream
+    /// did not come up"
     val mediaState: StateFlow<MediaState<ItemsSnapshot>> get() = store.state
 
+    /// The library is connected right now. On a disconnect the last snapshot stays on screen —
+    /// it is still the best one known — but it must not be passed off as current: the rows and
+    /// their actions may be stale.
     val mediaConnected: StateFlow<Boolean> get() = store.connected
 
+    /// The item from the list's last snapshot, only while connected: a stale row must not be
+    /// passed off as the item's state even for half a second.
     fun liveItem(id: String): Item? {
         if (!store.connected.value)
             return null
@@ -49,6 +64,9 @@ class TorrentsViewModel : ViewModel() {
         return data!!
     }
 
+    /// The library stream is kept open for a while after leaving the screen: going into an item
+    /// and back is a matter of seconds, and reconnecting on return marked the rows "disconnected"
+    /// and rebound them mid animation. Gone for long (player) — the stream is closed.
     private var linger: Job? = null
 
     fun setUpdate(update: Boolean) {
@@ -88,8 +106,13 @@ class TorrentsViewModel : ViewModel() {
             combine(local, store.state, store.connected) { locals, media, connected ->
                 val remote = (media as? MediaState.Ready)?.data?.items
                     ?.map { it.toUiTorrent() }
+                    // No connection to the library: the snapshot stays on screen (it is still
+                    // the best one known), but no actions may be offered from it. They are
+                    // cleared here, in the only place the list is assembled, so that no consumer
+                    // can show a button from stale data.
                     ?.map { if (connected) it else it.copy(torrmediaActions = emptySet()) }
                     ?: emptyList()
+                // one list ordered by freshness; items without a date go last
                 (locals + remote).sortedByDescending { it.timestamp }
             }.collect { list ->
                 withContext(Dispatchers.Main) { data?.value = list }
@@ -98,6 +121,8 @@ class TorrentsViewModel : ViewModel() {
     }
 }
 
+/// A torrmedia item in the shared list model. hash carries the opaque id from the contract:
+/// it must not be parsed, compared piece by piece or constructed.
 fun Item.toUiTorrent(): Torrent = Torrent(
     title = title,
     poster = null,

@@ -148,6 +148,11 @@
             app:iconSize="22dp"
             app:iconTint="?attr/colorAccent" />
 
+        <!-- Delete watched: a frequent action while watching a series. There is no
+             second "trash" button next to it: removing the torrent lives in the "more"
+             menu, so missing with the remote onto the neighbouring button cannot take
+             the whole torrent away. The text is the number of episodes that will go;
+             it is set from code. -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnQbitDeleteWatched"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
@@ -176,6 +181,9 @@
             app:iconSize="24dp"
             app:iconTint="?attr/colorAccent" />
 
+        <!-- Rare and expensive actions (recheck rehashes the whole torrent, removal
+             takes it away entirely) are tucked in here so that a stray tap next to
+             "Stop" does not trigger them. -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnQbitMore"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"

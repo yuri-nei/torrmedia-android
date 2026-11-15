@@ -93,6 +93,9 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
 //                    }
                     val chooser = Intent.createChooser(magnetIntent, App.context.getString(R.string.open_with)).apply {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                            // applicationId (io.github.yurinei.torrmedia) differs from the classes' package
+                            // (ru.yourok.torrserve.*): a name glued from APPLICATION_ID pointed to
+                            // a non-existent component, and our own activity stayed in the chooser
                             val excludedComponentNames = arrayOf(
                                 ComponentName(BuildConfig.APPLICATION_ID, PlayActivity::class.java.name)
                             )
@@ -144,6 +147,8 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
                         .setMessage(R.string.torrmedia_remove_with_data_confirm)
                         .setPositiveButton(android.R.string.ok) { _, _ ->
                             thread {
+                                // local torrents are removed ONLY after confirmation: before,
+                                // they were already gone and "Cancel" did not bring them back
                                 removeLocal(local)
                                 remote.forEach { torr -> removeRemote(torr) }
                             }
@@ -159,6 +164,8 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
                 thread {
                     selected.forEach {
                         try {
+                            // route by source: Api.remViewed() knows only about TorrServer;
+                            // for library/qBit items the watch marks live in torrmedia
                             if (it.src == "torrmedia") {
                                 if (ItemAction.CLEAR_VIEWED !in it.torrmediaActions) {
                                     App.toast(App.context.getString(R.string.torrmedia_action_unavailable), true)
@@ -206,6 +213,12 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
         }
     }
 
+    /**
+     * Removes a torrmedia item. What exactly is allowed is told by the server in the actions
+     * field: the client does not work out "is this allowed" on its own and does not try anything
+     * "just in case". The 202 arrives at once, progress and result come as operation events in
+     * the item's stream; the list redraws when the server sends the next snapshot.
+     */
     private fun removeRemote(torr: Torrent) {
         try {
             val withData = ItemAction.REMOVE_WITH_DATA in torr.torrmediaActions
@@ -213,6 +226,8 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
                 App.toast(App.context.getString(R.string.torrmedia_action_unavailable), true)
                 return
             }
+            // do not throw the operation id away: its outcome may never arrive as an event, and the
+            // only way to know it for sure is to ask.
             val op = TorrmediaApi.removeItem(torr.hash, withData)
             if (op.id.isNotEmpty())
                 reportOperationOutcome(op.id)
@@ -221,6 +236,9 @@ class TorrentsActionBar(private val listView: AbsListView) : MultiChoiceModeList
         }
     }
 
+    /// Polls the operation until a terminal state. Item operation events go to the stream of
+    /// that specific item, while the main list listens to the shared /events, so a single GET
+    /// right after the 202 is not enough.
     private fun reportOperationOutcome(id: String) {
         thread {
             val deadline = System.nanoTime() + OPERATION_POLL_TIMEOUT_MS * 1_000_000

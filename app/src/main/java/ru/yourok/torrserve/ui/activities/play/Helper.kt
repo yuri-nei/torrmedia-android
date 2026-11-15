@@ -73,12 +73,18 @@ fun PlayActivity.addAndExit() {
     finish()
 }
 
+/// torrmedia: show the torrent's file list and let the user choose what to download
 fun PlayActivity.qbitAndExit() {
+    // The server accepts only magnet: links, so say so right away instead of "HTTP 403".
+    // The button is not even shown for http(s), but the intent comes from outside.
     if (!isMagnetLink(torrentLink)) {
         App.toast(R.string.qbit_only_magnet, true)
         finish()
         return
     }
+    // The full link is no longer shown in a separate dialog: the selection window shows
+    // essentially the same thing (what the item is and which files it has), nothing is
+    // downloaded before confirmation, and discarding removes the draft with its data.
     AddTorrentFragment.newInstance(torrentLink.trim()).apply {
         onDone = { finish() }
         show(this@qbitAndExit, R.id.bottom_container)

@@ -87,6 +87,9 @@ object TorrentHelper {
         }
     }
 
+    /// torrmedia provides a ready-made magnet (with trackers), so we use it.
+    /// For its items there is nothing to build a magnet from: the id is opaque, carries no
+    /// info hash, and the contract deliberately does not expose one. Empty string = no magnet.
     fun getTorrentMagnet(torr: Torrent): String {
         if (torr.torrmediaMagnet.isNotEmpty())
             return torr.torrmediaMagnet

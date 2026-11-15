@@ -6,6 +6,8 @@ import androidx.fragment.app.FragmentTransaction
 import ru.yourok.torrserve.R
 
 fun FragmentActivity.commitFragment(block: FragmentTransaction.() -> Unit) {
+    // Fade through the background, not a cross-fade: the system fade_in/fade_out last 500/400 ms
+    // and run at the same time, so transparent screens showed through each other for half a second.
     val transact = supportFragmentManager.beginTransaction()
         .setCustomAnimations(
             R.anim.screen_enter,

@@ -6,6 +6,12 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * Parsing of the torrmedia contract. Plain JVM, no Android.
+ *
+ * Guards three things: a snapshot turns into models without loss, null fields and unknown
+ * values don't break parsing, and an action missing from actions is never offered to anyone.
+ */
 class TorrmediaModelsTest {
 
     private val listBody = """
@@ -34,6 +40,7 @@ class TorrmediaModelsTest {
         assertEquals("Shows", item.category)
         assertEquals(1785000000L, item.addedAt)
         assertEquals(1, item.transfer?.seeds)
+        // eta = null means "unknown", not zero seconds
         assertNull(item.transfer?.eta)
         assertEquals(
             setOf(
@@ -42,6 +49,7 @@ class TorrmediaModelsTest {
             ),
             item.actions
         )
+        // the torrent list carries no files: null is not the same as "no files"
         assertNull(item.files)
         assertNull(item.magnet)
     }
@@ -76,6 +84,7 @@ class TorrmediaModelsTest {
         assertEquals(FileStatus.READY, files[0].status)
         assertEquals(WatchState.WATCHED, files[0].watch)
         assertEquals(1610612736L, files[0].position)
+        // watch = null means "not watched", not a broken parse
         assertEquals(WatchState.NONE, files[1].watch)
         assertEquals(FileStatus.SKIPPED, files[1].status)
         assertEquals(setOf(FileAction.ENABLE), files[1].actions)
@@ -90,6 +99,8 @@ class TorrmediaModelsTest {
         )
         assertEquals(ItemStatus.UNKNOWN, item.status)
         assertEquals(FileStatus.UNKNOWN, item.files?.get(0)?.status)
+        // an unknown ACTION is dropped entirely: never draw a button the server
+        // did not promise
         assertEquals(setOf(ItemAction.STOP), item.actions)
         assertEquals(setOf(FileAction.PLAY), item.files?.get(0)?.actions)
     }
@@ -103,6 +114,7 @@ class TorrmediaModelsTest {
         assertEquals(0L, item.size)
         assertNull(item.transfer)
         assertTrue(item.actions.isEmpty())
+        // no items at all is an empty list, not a crash
         assertTrue(parseItems("{}").items.isEmpty())
     }
 
@@ -112,6 +124,7 @@ class TorrmediaModelsTest {
         assertTrue(e is TorrmediaException)
     }
 
+    // --- errors ---------------------------------------------------------------
 
     @Test
     fun `error body becomes a typed exception`() {
@@ -141,11 +154,13 @@ class TorrmediaModelsTest {
     fun `unknown or absent code stays unknown but keeps the text`() {
         val unknown = parseError(500, """{"error":"boom","code":"kaboom"}""")
         assertEquals(TorrmediaErrorCode.UNKNOWN, unknown.code)
+        // a proxy returned HTML instead of the body: no code, but the message must not be empty
         val html = parseError(502, "<html>Bad Gateway</html>")
         assertEquals(TorrmediaErrorCode.UNKNOWN, html.code)
         assertTrue(html.message?.contains("502") == true)
     }
 
+    // --- operations -----------------------------------------------------------
 
     @Test
     fun `operation maps state, phase and warnings`() {
@@ -206,6 +221,7 @@ class TorrmediaModelsTest {
         assertEquals(emptyList<String>(), parseCategories("""{"categories":[]}"""))
     }
 
+    // --- actions --------------------------------------------------------------
 
     @Test
     fun `file priority is read from the contract vocabulary`() {
@@ -224,31 +240,40 @@ class TorrmediaModelsTest {
         assertEquals(FilePriority.HIGH, files[0].priority)
         assertEquals(setOf(FileAction.SET_PRIORITY, FileAction.DELETE), files[0].actions)
         assertEquals(listOf(FileAction.SET_PRIORITY, FileAction.DELETE), fileMenuActions(files[0].actions))
+        // an excluded file has no priority, which is not the same as "normal"
         assertNull(files[1].priority)
+        // an unknown word does not turn into one of the known priorities
         assertNull(files[2].priority)
         assertEquals(FilePriority.MAX, files[3].priority)
     }
 
     @Test
     fun `action missing from actions is never offered`() {
+        // the torrent is downloading: the server allowed only stopping
         val downloading = setOf(ItemAction.STOP, ItemAction.RECHECK)
         assertEquals(ItemAction.STOP, primaryTransferAction(downloading))
         assertEquals(listOf(ItemAction.RECHECK), itemMenuActions(downloading))
 
+        // a data check is running: nothing is allowed, so there must be no buttons
         val checking = emptySet<ItemAction>()
         assertNull(primaryTransferAction(checking))
         assertEquals(emptyList<ItemAction>(), itemMenuActions(checking))
 
         val stopped = setOf(ItemAction.START, ItemAction.REMOVE, ItemAction.REMOVE_WITH_DATA)
         assertEquals(ItemAction.START, primaryTransferAction(stopped))
+        // start/stop has its own button and is not repeated in the "more" menu; removal is menu-only
         assertEquals(listOf(ItemAction.REMOVE, ItemAction.REMOVE_WITH_DATA), itemMenuActions(stopped))
 
+        // the file is playing right now: the server offered neither delete nor enable
         assertEquals(emptyList<FileAction>(), fileMenuActions(setOf(FileAction.PLAY)))
         assertEquals(
             listOf(FileAction.SET_VIEWED, FileAction.DELETE),
             fileMenuActions(setOf(FileAction.PLAY, FileAction.DELETE, FileAction.SET_VIEWED))
         )
 
+        // deleting watched episodes has its own button and is not in the menu. Removing the
+        // torrent comes after recheck, in order of increasing destructiveness: the
+        // irreversible option must not be the first entry
         assertEquals(
             listOf(ItemAction.RECHECK, ItemAction.REMOVE, ItemAction.REMOVE_WITH_DATA),
             itemMenuActions(
@@ -260,6 +285,11 @@ class TorrmediaModelsTest {
         )
     }
 
+    /**
+     * The confirmation dialog gives the episode count from the same snapshot that is on
+     * screen. A watched episode the server did not allow deleting (playing, already
+     * excluded) is left out; otherwise the number would promise more than will happen.
+     */
     @Test
     fun `delete watched counts only what the server allows`() {
         val item = parseItem(
@@ -275,6 +305,10 @@ class TorrmediaModelsTest {
         assertEquals(0, watchedToDelete(emptyList()))
     }
 
+    /**
+     * Focus lands on what to watch next: a partly watched episode beats the first
+     * untouched one, and for a fully watched season it is simply the first row.
+     */
     @Test
     fun `next episode is the started one, else the first untouched`() {
         fun files(vararg watch: String?): List<MediaFile> {
@@ -292,6 +326,8 @@ class TorrmediaModelsTest {
 
     @Test
     fun `unknown status offers nothing on its own`() {
+        // qBittorrent is unavailable: status unknown, actions empty, so the screen is empty
+        // too, because the client draws no conclusions of its own from the status
         val item = parseItem("""{"id":"p:abc","status":"unknown","actions":[]}""")
         assertEquals(ItemStatus.UNKNOWN, item.status)
         assertNull(primaryTransferAction(item.actions))
@@ -306,6 +342,11 @@ class TorrmediaModelsTest {
         assertFalse(isMagnetLink(""))
     }
 
+    /**
+     * The server calls an incomplete file partial (completeness, not activity). The
+     * client enum used to know downloading instead, so every partial became UNKNOWN,
+     * with no label and no percentage.
+     */
     @Test
     fun `partial file status is understood`() {
         val json = """{"id":"a","title":"R","status":"stopped","progress":0.5,"size":10,
@@ -320,6 +361,8 @@ class TorrmediaModelsTest {
         assertEquals(FileStatus.PARTIAL, item.files!![0].status)
     }
 
+    /// An unknown status value still falls back safely to UNKNOWN and does not
+    /// break parsing: the contract may grow before the client is updated.
     @Test
     fun `unknown file status does not break parsing`() {
         val json = """{"id":"a","title":"R","status":"stopped","progress":1.0,"size":1,
@@ -332,9 +375,11 @@ class TorrmediaModelsTest {
                                  "position":0,"actions":["play","warp_drive"]}]}"""
         val file = parseItem(json).files!![0]
         assertEquals(FileStatus.UNKNOWN, file.status)
+        // and an unknown action is dropped, not shown as a button
         assertEquals(setOf(FileAction.PLAY), file.actions)
     }
 
+    // --- add screen ---------------------------------------------------------
 
     private val draftBody = """
         {"id":"dr_4f2b91c0a3d7","status":"ready","title":"Series.S01","size":6442450944,
@@ -357,11 +402,14 @@ class TorrmediaModelsTest {
         assertEquals(2, draft.files.size)
         assertTrue(draft.files[0].wanted)
         assertFalse(draft.files[1].wanted)
+        // the path inside the torrent shows nesting: a sample from extras must not
+        // look like an episode
         assertEquals("extras/sample.mkv", draft.files[1].path)
         assertEquals(41231234560L, draft.storage.free)
         assertEquals(536870912L, draft.storage.reserve)
     }
 
+    /// The server does not always know the free space: null means "unknown", not "zero bytes".
     @Test
     fun `unknown free space is null, not zero`() {
         val draft = parseDraft(
@@ -372,6 +420,7 @@ class TorrmediaModelsTest {
         assertEquals(DraftStatus.RESOLVING, draft.status)
         assertNull(draft.storage.free)
         assertNull(draft.storage.total)
+        // Space is unknown and something is selected: there is no shortfall to report
         val files = parseDraft(draftBody).files
         assertNull(missingBytes(files, setOf(files[0].id), draft.storage))
     }
@@ -392,12 +441,16 @@ class TorrmediaModelsTest {
         assertEquals(6442450944L, selectedBytes(draft.files, all))
         assertEquals(3221225472L, selectedBytes(draft.files, setOf("ZTAx")))
 
+        // one episode fits into 38 GB free, and so do both
         assertEquals(0L, missingBytes(draft.files, all, draft.storage))
+        // but neither fits into 2 GB free, and the shortfall is counted with the reserve
         val tight = Storage(free = 2L shl 30, total = 100L shl 30, reserve = 512L shl 20)
         assertEquals(
             3221225472L + (512L shl 20) - (2L shl 30),
             missingBytes(draft.files, setOf("ZTAx"), tight)
         )
+        // Nothing selected: the torrent is simply added stopped, with nothing to download.
+        // Even on a full disk there must be no shortfall here.
         assertEquals(0L, missingBytes(draft.files, emptySet(), draft.storage))
         assertEquals(0L, missingBytes(draft.files, emptySet(), tight))
         assertEquals(0L, missingBytes(draft.files, emptySet(),

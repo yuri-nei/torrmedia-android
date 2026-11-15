@@ -19,6 +19,7 @@ class StatusViewModel : ViewModel() {
     var data: MutableLiveData<String>? = null
     var host: MutableLiveData<String>? = null
 
+    /// The download server block in the side menu header; polls only while someone is looking at it
     val torrmedia = TorrmediaHeaderLiveData()
 
     fun get(): LiveData<String> {

@@ -8,6 +8,7 @@
     android:orientation="horizontal"
     android:padding="5dp">
 
+    <!-- The checkbox takes no focus: with a remote the whole row is selected, not part of it -->
     <CheckBox
         android:id="@+id/cbFileWanted"
         android:layout_width="wrap_content"

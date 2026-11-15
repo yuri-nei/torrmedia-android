@@ -43,14 +43,19 @@ data class Torrent(
     // torrmedia: "torrmedia" marks rows that came from torrmedia (null = TorrServer)
     var src: String? = null,
 
+    // File summary of the item from the torrmedia contract
     var torrmediaFilesReady: Int = 0,
     var torrmediaFilesTotal: Int = 0,
     var torrmediaFilesWatched: Int = 0,
 
+    // Normalized item status, as the server named it
     var torrmediaStatus: ItemStatus = ItemStatus.UNKNOWN,
 
+    // Actions allowed right now. The client neither infers them itself nor adds to them.
     var torrmediaActions: Set<ItemAction> = emptySet(),
 
+    // Ready-made link with trackers; synthesizing magnet:?xt=urn:btih:<hash> is wrong
+    // for private and v2-only torrents
     var torrmediaMagnet: String = "",
 )
 

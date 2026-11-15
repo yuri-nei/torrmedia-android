@@ -150,6 +150,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
         findPreference<Preference>("torrmedia_test")?.setOnPreferenceClickListener {
             val ctx = requireActivity()
             lifecycleScope.launch(Dispatchers.IO) {
+                // the report stays only in the dialog: in logcat it exposed server addresses
                 val report = NetDiag.run()
                 withContext(Dispatchers.Main) {
                     AlertDialog.Builder(ctx)

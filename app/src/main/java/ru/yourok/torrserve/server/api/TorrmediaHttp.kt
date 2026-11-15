@@ -9,16 +9,31 @@ import java.net.HttpURLConnection
 import java.net.URL
 import javax.net.ssl.HttpsURLConnection
 
+/**
+ * Thin HTTP layer on top of the JDK's HttpURLConnection.
+ *
+ * The HTML parser that serves as the HTTP client in the rest of the app (utils/Net) is
+ * deliberately kept out of here: it reads the whole body (an event stream cannot be read that
+ * way) and silently sets readTimeout = timeout/2, so the real wait is half of what was set.
+ */
 internal object TorrmediaHttp {
 
     data class Response(val code: Int, val body: String)
 
     private const val CONNECT_TIMEOUT = 7_000
 
+    /// A regular request: the response comes right away, the contract has no long synchronous
+    /// endpoints; anything that touches qBittorrent answers 202 and goes on in the event stream.
     private const val READ_TIMEOUT = 15_000
 
+    /// The stream idles between events, and a ping comes every 20 s (per the contract).
+    /// The read timeout is the "server is alive" timer: two missed pings mean a disconnect.
     private const val STREAM_READ_TIMEOUT = 45_000
 
+    /**
+     * An open event stream. close() is safe to call from another thread; it is the way to
+     * wake up read(), which otherwise hangs on the socket until the timeout.
+     */
     class Stream internal constructor(
         private val conn: HttpURLConnection,
         private val input: InputStream,
@@ -26,6 +41,7 @@ internal object TorrmediaHttp {
         @Volatile
         private var closed = false
 
+        /// Blocks until the end of the stream, a read error or close()
         fun read(onEvent: (SseEvent) -> Unit) {
             val parser = SseParser(onEvent)
             val reader = InputStreamReader(input, Charsets.UTF_8)
@@ -34,7 +50,7 @@ internal object TorrmediaHttp {
                 val n = try {
                     reader.read(buf)
                 } catch (e: Exception) {
-                    if (closed) return
+                    if (closed) return // closed from outside, not an error
                     throw e
                 }
                 if (n < 0)
@@ -80,6 +96,7 @@ internal object TorrmediaHttp {
         try {
             conn.requestMethod = "GET"
             conn.setRequestProperty("Accept", "text/event-stream")
+            // intermediaries buffer compressed bodies, so an event stops arriving as an event
             conn.setRequestProperty("Accept-Encoding", "identity")
             val code = conn.responseCode
             if (code !in 200..299)
@@ -96,6 +113,7 @@ internal object TorrmediaHttp {
         conn.connectTimeout = CONNECT_TIMEOUT
         conn.readTimeout = readTimeout
         conn.useCaches = false
+        // the token is optional: a service behind a VPN can run without one
         if (token.isNotEmpty())
             conn.setRequestProperty("Authorization", "Bearer $token")
         if (conn is HttpsURLConnection && !isBrokenTCL)

@@ -9,6 +9,10 @@ plugins {
 android {
 
     lint {
+        // Lint is a release gate, so its noise is silenced selectively, not wholesale.
+        // MissingTranslation: the fork has no translators for bg/uk/zh, and an untranslated
+        // string is simply shown in English. Everything else, including NewApi
+        // (a real crash on old devices with minSdk 16), stays an error.
         disable 'MissingTranslation'
         abortOnError true
         warningsAsErrors false
@@ -25,6 +29,9 @@ android {
         // Use SupportLibrary for vectors
         vectorDrawables.useSupportLibrary = true
     }
+    // Release signing: settings come from keystore.properties in the project root or from
+    // environment variables. Keys stay out of the repository (keystore.properties and *.jks
+    // are in .gitignore). If nothing is set, release builds unsigned instead of failing.
     signingConfigs {
         release {
             def props = new Properties()
@@ -44,6 +51,7 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // the config is applied only when a keystore is actually set up
             signingConfig signingConfigs.release.storeFile != null ? signingConfigs.release : null
         }
     }
@@ -64,6 +72,9 @@ kotlin {
     jvmToolchain(21)
 }
 
+// Build time in the file name: the app version does not change between builds,
+// and without the stamp there is no telling which APK is newer, while installs are manual.
+// The new AGP no longer accepts archivesBaseName in defaultConfig, only base.archivesName.
 base {
     archivesName = "torrmedia-android-" + android.defaultConfig.versionName + "-" + new Date().format("yyyyMMdd-HHmm")
 }
@@ -128,6 +139,8 @@ dependencies {
     def jsoupVersion = '1.16.1' // 1.16.2, 1.17.1, 1.17.2 thorow java.lang.VerifyError on api19
     //noinspection GradleDependency
     implementation "org.jsoup:jsoup:${jsoupVersion}"
+    // JVM unit tests of pure logic (matching by hash, state classification,
+    // parsing torrmedia responses): test configuration only, not shipped in the APK
     testImplementation 'junit:junit:4.13.2'
 }
 

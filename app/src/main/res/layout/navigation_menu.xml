@@ -19,6 +19,11 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
+            <!-- The header is a status panel for two servers laid out alike: label and
+                 version/state badge on the top line, address on the line below.
+                 TorrServer and the download server are separate focusable blocks: each
+                 opens its own screen (server picker / settings), and with a remote they
+                 are clearly told apart. -->
             <FrameLayout
                 android:id="@+id/header"
                 android:layout_width="match_parent"
@@ -220,6 +225,9 @@
                 android:layout_height="wrap_content"
                 android:background="?android:attr/listDivider" />
 
+            <!-- Search in the torrent list: the field above the list opens from here
+                 instead of taking space on the main screen all the time
+                 (see main_fragment.xml) -->
             <FrameLayout
                 android:id="@+id/btnSearch"
                 android:layout_width="match_parent"

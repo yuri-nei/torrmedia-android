@@ -35,6 +35,18 @@ import ru.yourok.torrserve.utils.Format
 import ru.yourok.torrserve.utils.ThemeUtil
 import kotlin.concurrent.thread
 
+/**
+ * The add-item window: the torrent's file list before the download starts.
+ *
+ * A magnet link does not carry the file list; only the network knows it. So the server
+ * creates a draft: the torrent is added to qBittorrent, fetches the metadata and is paused
+ * without downloading anything. All this time it is not in the library, and discarding
+ * removes it together with whatever has already landed on disk.
+ *
+ * The screen decides nothing for the server: the file list, the preselection and the free
+ * space arrive in the draft snapshot. The only state of its own here is which checkboxes
+ * the user cleared.
+ */
 class AddTorrentFragment : TSFragment() {
 
     companion object {
@@ -50,13 +62,18 @@ class AddTorrentFragment : TSFragment() {
     private var store: TorrmediaStore<Draft>? = null
     private var draft: Draft? = null
 
+    /// Selected files. Initialized from the server's preselection exactly once: the next
+    /// snapshot must not bring back checkboxes the user cleared.
     private var selected: MutableSet<String>? = null
     private var category = ""
     private var categories: List<String> = emptyList()
 
+    /// The item is created (or the draft is already discarded): nothing to discard on close.
     private var settled = false
     private var closed = false
 
+    /// What to do when finished: close the window. Our activity is a dialog, and there is
+    /// nowhere to go back to after adding.
     var onDone: (() -> Unit)? = null
 
     override fun onCreateView(
@@ -86,17 +103,23 @@ class AddTorrentFragment : TSFragment() {
     }
 
     override fun onDestroy() {
+        // The user left without confirming: the draft keeps a live torrent in qBittorrent,
+        // and there is no point waiting for the server timeout to remove it. The work runs
+        // on a plain thread: lifecycleScope is already cancelled by this point.
         val id = draftId
         if (!settled && id.isNotEmpty())
             thread { runCatching { TorrmediaApi.discardDraft(id) } }
         super.onDestroy()
     }
 
+    // --- draft --------------------------------------------------------------
 
     private fun createDraft() {
         viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
             showProgress()
             try {
+                // No category on creation: it can be chosen later, and an abandoned
+                // draft should not get the chance to leave a trace anywhere.
                 val created = TorrmediaApi.createDraft(magnet, "")
                 withContext(Dispatchers.Main) {
                     if (!isAdded)
@@ -122,6 +145,8 @@ class AddTorrentFragment : TSFragment() {
             val list = runCatching { TorrmediaApi.categories() }.getOrNull() ?: return@launch
             withContext(Dispatchers.Main) {
                 categories = list
+                // The last chosen category is preset if it still exists on the
+                // server: the user changes the category list, not us.
                 val remembered = Settings.getTorrmediaCategory()
                 if (category.isEmpty() && remembered in list)
                     category = remembered
@@ -134,6 +159,8 @@ class AddTorrentFragment : TSFragment() {
         when (state) {
             is MediaState.Loading -> {}
             is MediaState.Removed -> fail(getString(R.string.torrmedia_add_failed))
+            // The draft is gone (the service was restarted, or it expired): nothing to
+            // wait for, reconnecting to an object that does not exist is pointless.
             is MediaState.Failed ->
                 if (state.fatal || state.code == TorrmediaErrorCode.NOT_FOUND) fail(state.message)
             is MediaState.Ready -> render(state.data)
@@ -156,7 +183,7 @@ class AddTorrentFragment : TSFragment() {
             }
 
             DraftStatus.FAILED -> {
-                settled = true
+                settled = true // the server already removed the torrent, or it was never created
                 fail(current.error ?: getString(R.string.torrmedia_add_failed))
                 return
             }
@@ -237,6 +264,8 @@ class AddTorrentFragment : TSFragment() {
             text = if (chosen.size == current.files.size && current.files.isNotEmpty())
                 getString(R.string.torrmedia_add_select_none) else getString(R.string.torrmedia_add_select_all)
         }
+        // An empty selection means "add for later": the item is created stopped, and the
+        // wanted episodes are enabled later from its screen. So the button is always enabled.
         vi.findViewById<MaterialButton>(R.id.btnAddDownload)?.isEnabled = !busy
 
         viewLifecycleOwner.lifecycleScope.launch {
@@ -251,6 +280,7 @@ class AddTorrentFragment : TSFragment() {
         else -> getString(R.string.torrmedia_loading)
     }
 
+    // --- selection ----------------------------------------------------------
 
     private fun toggle(file: DraftFile) {
         val chosen = selected ?: return
@@ -286,10 +316,15 @@ class AddTorrentFragment : TSFragment() {
             .show()
     }
 
+    // --- confirm and discard ------------------------------------------------
 
     private fun download() {
         val current = draft ?: return
+        // Nothing selected: the item is created stopped and there is nothing to download,
+        // so there is no space to check and nothing to confirm here.
         val chosen = selected?.toList().orEmpty()
+        // The server does not refuse for lack of space, on purpose: the user decides.
+        // But silently starting a download that will not fit would be dishonest.
         val missing = missingBytes(current.files, chosen.toSet(), current.storage) ?: 0
         if (missing > 0) {
             AlertDialog.Builder(requireContext())
@@ -327,12 +362,14 @@ class AddTorrentFragment : TSFragment() {
         if (closed)
             return
         val id = draftId
-        settled = true
+        settled = true // we send the discard ourselves, no need to repeat it in onDestroy
         if (id.isNotEmpty())
             thread { runCatching { TorrmediaApi.discardDraft(id) } }
         close()
     }
 
+    /// Show the reason and leave. Also called from a background thread, so closing the
+    /// window is moved to the main thread.
     private fun fail(message: String) {
         App.toast(App.context.getString(R.string.torrmedia_add_failed) + ": " + message, true)
         close()
@@ -350,6 +387,7 @@ class AddTorrentFragment : TSFragment() {
         }
     }
 
+    // --- list ---------------------------------------------------------------
 
     private class FilesAdapter : BaseAdapter() {
         private var rows: List<DraftFile> = emptyList()
@@ -376,6 +414,8 @@ class AddTorrentFragment : TSFragment() {
             vi.findViewById<CheckBox>(R.id.cbFileWanted)?.isChecked = wanted
             vi.findViewById<TextView>(R.id.tvFileName)?.apply {
                 text = ""
+                // Show the whole path: torrents can contain folders, and "sample.mkv"
+                // from extras must be told apart from an episode with the same name.
                 append(row.path.ifEmpty { row.name }, ColorUtils.setAlphaComponent(colorBright, 250))
             }
             vi.findViewById<TextView>(R.id.tvFileSize)?.text = Format.byteFmt(row.size)

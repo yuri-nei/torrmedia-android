@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- The new screen appears once the old one has faded out (see screen_exit) and
+     grows slightly to its full size, which shows that the next level has opened.
+     Until startOffset it is fully transparent. -->
 <set xmlns:android="http://schemas.android.com/apk/res/android"
     android:duration="180"
     android:interpolator="@android:interpolator/decelerate_quad"

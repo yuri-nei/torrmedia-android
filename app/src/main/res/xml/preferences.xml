@@ -83,6 +83,7 @@
         android:key="torrmedia"
         android:title="@string/torrmedia_pref_title" />
 
+    <!-- all the app needs: the service address and, optionally, its token -->
     <EditTextPreference
         app:key="torrmedia_url"
         app:summary="@string/torrmedia_url_summary"

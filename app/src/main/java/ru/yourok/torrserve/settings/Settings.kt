@@ -62,13 +62,20 @@ object Settings {
     fun getChooserAction(): Int = get("chooser_action", 0)
     fun setChooserAction(v: Int) = set("chooser_action", v)
 
+    // torrmedia is the app's single entry point: the client never needs the qBittorrent
+    // address or credentials for anything (see API.md)
     fun getTorrmediaUrl(): String = withHttpScheme(get("torrmedia_url", ""))
 
+    /// Optional torrmedia Bearer token; empty = the service sits behind a VPN without auth
     fun getTorrmediaToken(): String = get("torrmedia_token", "").trim()
 
+    // The last category chosen in the add window. It is preset only if it still exists
+    // on the server: the user manages the category list, not us.
     fun getTorrmediaCategory(): String = get("torrmedia_category", "")
     fun setTorrmediaCategory(v: String) = set("torrmedia_category", v)
 
+    // NB: do not check the scheme via toUri(): Uri.parse("192.0.2.10:8091").scheme
+    // returns "192.0.2.10", and http:// would not be prepended
     private fun withHttpScheme(raw: String): String {
         val url = raw.trim().trimEnd('/')
         if (url.isEmpty() || url.startsWith("http://", true) || url.startsWith("https://", true))
@@ -87,6 +94,7 @@ object Settings {
 
     fun showCover(): Boolean = get("show_cover", true)
 
+    /// The "TorrServe is free..." banner at launch: from upstream, can be turned off in the fork
     fun showDonate(): Boolean = get("show_donate", true)
     fun kodiPlaylist(): Boolean = get("kodi_playlist", true)
     fun getTheme(): String = get("theme", "auto")

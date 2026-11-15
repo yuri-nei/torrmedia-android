@@ -5,6 +5,14 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.URL
 
+/**
+ * torrmedia: connectivity self-test for the settings screen.
+ * Reports raw TCP reachability separately from the HTTP layer, so a broken URL,
+ * a blocked port and a bug in the API client can be told apart without adb.
+ *
+ * There is nothing to check besides torrmedia: the fork has no other network peer.
+ * The report contains no credentials and cannot contain any.
+ */
 object NetDiag {
 
     fun run(): String {
@@ -30,6 +38,8 @@ object NetDiag {
     }
 
     private fun report(sb: StringBuilder, title: String, base: String) {
+        // the full URL is not written to the report: it goes both to the dialog and
+        // (previously) to logcat, so only host:port is printed below
         sb.appendLine("$title:")
         if (base.isEmpty()) {
             sb.appendLine("  URL is not set")
@@ -47,6 +57,7 @@ object NetDiag {
         sb.appendLine("  host=[$host] chars=${host.map { it.code }.joinToString(",")} port=$port")
 
         val started = System.currentTimeMillis()
+        // NB: Closeable.use() requires API 19, but the fork keeps minSdk 16, so close manually
         val socket = Socket()
         try {
             socket.connect(InetSocketAddress(host, port), 7000)

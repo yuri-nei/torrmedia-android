@@ -5,6 +5,11 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
+    <!-- List search. A field always on screen ate almost a whole list row on a TV,
+         and it is rarely used with a remote, so it opens on demand: the "Search" item
+         in the left menu or the remote's search button (TorrentsFragment.openSearch),
+         and hides once focus leaves it. No clear button inside the field: moving to it
+         with the remote would hide the field; clearing is on the strip below. -->
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/tilSearch"
         android:layout_width="match_parent"
@@ -29,6 +34,9 @@
             android:textAppearance="@style/TextAppearance.AppCompat.Medium" />
     </com.google.android.material.textfield.TextInputLayout>
 
+    <!-- A query is set but the field is closed: a thin strip shows it and the match
+         count. Otherwise the filtered list would look as if torrents had vanished. OK on
+         the text edits it again, the cross clears it. -->
     <LinearLayout
         android:id="@+id/searchChip"
         android:layout_width="match_parent"

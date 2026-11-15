@@ -55,6 +55,8 @@ class ThemeUtil {
                 }
             }
 
+        /// Whether the selected theme is light — for places where a color is picked in code
+        /// (toasts, snackbars)
         val isLightTheme: Boolean
             get() = selectedTheme == R.style.Theme_TorrServe_Light || selectedTheme == R.style.Theme_TorrServe_MdLight
 

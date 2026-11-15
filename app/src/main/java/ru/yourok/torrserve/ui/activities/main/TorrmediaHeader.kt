@@ -17,24 +17,29 @@ import ru.yourok.torrserve.server.api.TorrmediaApi
 import ru.yourok.torrserve.server.api.Storage
 import ru.yourok.torrserve.settings.Settings
 
+/**
+ * The torrmedia block in the side menu header: address, connection state and disk space.
+ * The server describes itself through /health and /storage; the client only picks which
+ * of the states to show.
+ */
 
 enum class TorrmediaLink {
-    CONNECTING,
+    CONNECTING, // the first response has not arrived yet
     ONLINE,
-    QBIT_DOWN,
-    DEGRADED,
+    QBIT_DOWN, // the service itself is alive, but qBittorrent does not respond
+    DEGRADED, // something else among the checks is failing (library root, watch marks)
     UNAUTHORIZED,
-    MISMATCH,
+    MISMATCH, // the APK and the server are not a matching pair
     OFFLINE,
 }
 
 enum class DiskLevel { OK, LOW, CRITICAL }
 
 data class TorrmediaHeader(
-    val host: String,
+    val host: String, // "": no URL is set, the block is not shown at all
     val link: TorrmediaLink,
     val version: String = "",
-    val storage: Storage? = null,
+    val storage: Storage? = null, // null: space is unknown
 )
 
 fun linkOf(health: Health): TorrmediaLink = when {
@@ -44,12 +49,18 @@ fun linkOf(health: Health): TorrmediaLink = when {
     else -> TorrmediaLink.ONLINE
 }
 
+/// Used space as a percentage; null if the server does not know the partition size
 fun usedPercent(storage: Storage): Int? {
     val free = storage.free ?: return null
     val total = storage.total?.takeIf { it > 0 } ?: return null
     return ((total - free).coerceIn(0, total) * 100 / total).toInt()
 }
 
+/**
+ * How alarming the disk space is. Critical: free space is under twice the reserve the
+ * server keeps untouched (past that not a single episode fits anymore), or under 3% of
+ * the partition; low: under 10%.
+ */
 fun diskLevel(storage: Storage): DiskLevel? {
     val free = storage.free ?: return null
     val total = storage.total?.takeIf { it > 0 } ?: return null
@@ -60,9 +71,15 @@ fun diskLevel(storage: Storage): DiskLevel? {
     }
 }
 
+/// Address without the scheme, like the TorrServer one on the line above
 fun displayHost(url: String): String =
     url.removePrefix("http://").removePrefix("https://").trimEnd('/')
 
+/**
+ * Polls torrmedia only while someone is looking at the data (the activity is on screen):
+ * the TV has no use for background traffic through the VPN. refresh() wakes the poll early:
+ * when the menu opens, the numbers must be fresh, not twenty seconds old.
+ */
 class TorrmediaHeaderLiveData : LiveData<TorrmediaHeader>() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val wake = Channel<Unit>(Channel.CONFLATED)
@@ -110,12 +127,13 @@ class TorrmediaHeaderLiveData : LiveData<TorrmediaHeader>() {
         val link = linkOf(health)
         if (link == TorrmediaLink.MISMATCH)
             return TorrmediaHeader(host, link, health.version)
+        // unlike /health, /storage requires the token: a refusal here is about access
         return try {
             TorrmediaHeader(host, link, health.version, TorrmediaApi.storage())
         } catch (e: TorrmediaException) {
             if (e.code == TorrmediaErrorCode.UNAUTHORIZED)
                 TorrmediaHeader(host, TorrmediaLink.UNAUTHORIZED, health.version)
-            else
+            else // space was briefly unavailable: old numbers are better than none
                 TorrmediaHeader(host, link, health.version, previous?.takeIf { it.host == host }?.storage)
         } catch (e: Exception) {
             TorrmediaHeader(host, link, health.version, previous?.takeIf { it.host == host }?.storage)

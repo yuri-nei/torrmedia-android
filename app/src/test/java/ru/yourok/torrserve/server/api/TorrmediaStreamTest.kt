@@ -4,6 +4,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * Parsing of text/event-stream and the reconnect backoff. Plain JVM, no Android, no sleeping.
+ */
 class TorrmediaStreamTest {
 
     private fun collect(vararg chunks: String): List<SseEvent> {
@@ -51,6 +54,7 @@ class TorrmediaStreamTest {
 
     @Test
     fun `an event split across reads is not lost`() {
+        // a socket read boundary does not match a line boundary
         val events = collect("event: sta", "te\ndata: {\"item", "s\":[]}\n", "\n")
         assertEquals(1, events.size)
         assertEquals("state", events[0].name)
@@ -59,6 +63,7 @@ class TorrmediaStreamTest {
 
     @Test
     fun `an unterminated event is not delivered`() {
+        // until a blank line arrives, the event does not count as received
         assertTrue(collect("event: state\ndata: {\"items\":[]}\n").isEmpty())
     }
 
@@ -89,11 +94,14 @@ class TorrmediaStreamTest {
         assertEquals("ping", events[0].name)
     }
 
+    // --- backoff --------------------------------------------------------------
 
     @Test
     fun `backoff grows exponentially and stops at the cap`() {
+        // with no jitter it is the lower edge of the window: base * 2^n / 2
         val floors = (0..7).map { reconnectDelayMs(it, 0.0) }
         assertEquals(listOf(500L, 1000L, 2000L, 4000L, 8000L, 15000L, 15000L, 15000L), floors)
+        // the cap is sane: even with maximum jitter the window stays within 30 s
         val ceils = (0..7).map { reconnectDelayMs(it, 0.999) }
         assertTrue(ceils.all { it < RECONNECT_CAP_MS })
         assertTrue(ceils.last() >= RECONNECT_CAP_MS / 2)
@@ -101,6 +109,8 @@ class TorrmediaStreamTest {
 
     @Test
     fun `jitter spreads clients over the whole window`() {
+        // identical backoff on every client means a service that has just come back up
+        // is immediately knocked down again by all of them at once
         val low = reconnectDelayMs(3, 0.0)
         val high = reconnectDelayMs(3, 0.99)
         assertTrue(high > low)
